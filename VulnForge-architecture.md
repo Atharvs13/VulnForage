@@ -22,7 +22,7 @@ The goal is to make the application behave like a real-world web application whi
 - Attack chaining
 - Exploitation and impact analysis
 
-
+> **Important:** VulnForge is designed only for an isolated local/private lab. All accounts, credentials, orders, files, secrets, and other data are synthetic.
 
 ---
 
