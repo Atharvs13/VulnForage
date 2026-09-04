@@ -1,0 +1,2 @@
+-- Executed by backend/src/database/schema.ts so direct Node development and Docker
+-- use exactly the same idempotent schema. This marker documents migration 001.

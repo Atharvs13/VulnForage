@@ -1,0 +1,1 @@
+import type{Request,Response}from'express';import{ok}from'../../utils/http.js';import{changeEmail}from'./service.js';export const change=(req:Request,res:Response)=>ok(res,{profile:changeEmail(req.user!.id,String(req.body?.email??'')),lab:{intentionallyVulnerable:true}});

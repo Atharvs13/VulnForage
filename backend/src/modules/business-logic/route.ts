@@ -1,0 +1,1 @@
+import{Router}from'express';import*as c from'./controller.js';export const businessLogicRouter=Router();businessLogicRouter.post('/cart/apply-coupon',c.coupon);businessLogicRouter.post('/checkout',c.checkout);businessLogicRouter.patch('/orders/:id/status',c.status);

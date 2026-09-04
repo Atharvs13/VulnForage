@@ -1,0 +1,1 @@
+import type{Request,Response}from'express';import{ok}from'../../utils/http.js';import{fetchControlled}from'./service.js';export const fetchTarget=(req:Request,res:Response)=>ok(res,{fetch:fetchControlled(String(req.body?.url??''),req.user!.id),lab:{intentionallyVulnerable:true}});

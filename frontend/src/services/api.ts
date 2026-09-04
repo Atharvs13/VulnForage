@@ -1,0 +1,4 @@
+const base=(import.meta.env.VITE_API_URL??'').replace(/\/$/,'');
+export class ApiError extends Error{constructor(public code:string,message:string,public status:number){super(message)}}
+export async function api<T>(path:string,options:RequestInit={}):Promise<T>{const headers=new Headers(options.headers);if(options.body&&!(options.body instanceof FormData))headers.set('Content-Type','application/json');const response=await fetch(`${base}${path}`,{...options,headers,credentials:'include'});const json=await response.json().catch(()=>null) as {success:boolean;data:T;error?:{code:string;message:string}}|null;if(!response.ok||!json?.success)throw new ApiError(json?.error?.code??'REQUEST_FAILED',json?.error?.message??`Request failed (${response.status})`,response.status);return json.data;}
+export const money=(cents:number)=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(cents/100);

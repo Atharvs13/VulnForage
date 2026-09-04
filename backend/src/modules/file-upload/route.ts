@@ -1,0 +1,1 @@
+import{Router}from'express';import multer from'multer';import{config}from'../../config/index.js';import*as c from'./controller.js';export const fileUploadRouter=Router();const upload=multer({storage:multer.memoryStorage(),limits:{fileSize:config.uploadMaxBytes}});fileUploadRouter.post('/upload',upload.single('file'),c.upload);fileUploadRouter.get('/upload/:id',c.get);

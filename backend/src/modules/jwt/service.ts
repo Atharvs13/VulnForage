@@ -1,0 +1,9 @@
+import{createHmac}from'node:crypto';import{config}from'../../config/index.js';import{AppError,assert}from'../../utils/errors.js';import{logEvent}from'../../services/log.service.js';
+const b64=(value:unknown)=>Buffer.from(JSON.stringify(value)).toString('base64url');
+const decode=(value:string)=>JSON.parse(Buffer.from(value,'base64url').toString('utf8'))as Record<string,unknown>;
+export function login(username:string,password:string){assert(username==='lab-learner'&&password==='TrainingJWT!',401,'LAB_INVALID_CREDENTIALS','Invalid lab credentials');const header=b64({alg:'HS256',typ:'JWT'});const payload=b64({sub:'lab-learner',role:'user',exp:Math.floor(Date.now()/1000)+3600});const signature=createHmac('sha256',config.labJwtSecret).update(`${header}.${payload}`).digest('base64url');return{token:`${header}.${payload}.${signature}`,credentialsHint:'lab-learner / TrainingJWT!'};}
+export function profile(token:string,userId:number){const parts=token.split('.');if(parts.length<2)throw new AppError(401,'LAB_TOKEN_INVALID','Malformed lab token');let header:Record<string,unknown>,payload:Record<string,unknown>;try{header=decode(parts[0]!);payload=decode(parts[1]!);}catch{throw new AppError(401,'LAB_TOKEN_INVALID','Malformed lab token');}
+  // Intentionally vulnerable: alg=none bypasses signature verification.
+  if(header.alg!=='none'){const expected=createHmac('sha256',config.labJwtSecret).update(`${parts[0]}.${parts[1]}`).digest('base64url');if(parts[2]!==expected)throw new AppError(401,'LAB_TOKEN_INVALID','Invalid lab signature');}
+  if(Number(payload.exp??0)<Date.now()/1000)throw new AppError(401,'LAB_TOKEN_EXPIRED','Lab token expired');
+  const admin=payload.role==='admin';if(admin)logEvent('LAB_JWT_ADMIN',{userId,metadata:{sub:payload.sub}});return{subject:payload.sub,role:payload.role,adminFlag:admin?'VF_JWT_ADMIN_001':null,algorithm:header.alg};}

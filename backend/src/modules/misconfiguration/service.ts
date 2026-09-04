@@ -1,0 +1,1 @@
+import{logEvent}from'../../services/log.service.js';export function debug(userId:number){logEvent('LAB_CONFIG_EXPOSED',{userId});return{debug:true,environment:'vulnforge-lab',build:'synthetic',featureFlags:['legacy-admin-hint'],labSecret:'VF_DEBUG_ONLY_001'};}

@@ -1,0 +1,1 @@
+import type{Request,Response}from'express';import{ok}from'../../utils/http.js';import{debug}from'./service.js';export const config=(req:Request,res:Response)=>ok(res,{config:debug(req.user!.id),lab:{intentionallyVulnerable:true}});

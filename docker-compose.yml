@@ -1,0 +1,24 @@
+services:
+  backend:
+    build: ./backend
+    environment:
+      NODE_ENV: development
+      PORT: 4000
+      LAB_MODE: "true"
+      DATABASE_URL: /app/data/vulnforge.db
+      SESSION_SECRET: local-vulnforge-secret
+      CORS_ORIGIN: http://localhost:5173
+    ports:
+      - "4000:4000"
+    volumes:
+      - vulnforge-data:/app/data
+
+  frontend:
+    build: ./frontend
+    depends_on:
+      - backend
+    ports:
+      - "5173:5173"
+
+volumes:
+  vulnforge-data:

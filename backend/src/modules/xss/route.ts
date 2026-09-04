@@ -1,0 +1,1 @@
+import {Router} from 'express'; import * as c from './controller.js'; export const xssRouter=Router(); xssRouter.get('/xss/search',c.search); xssRouter.post('/xss/tickets',c.create); xssRouter.get('/xss/tickets',c.list);
