@@ -25,7 +25,7 @@ export function migrate(): void {
   db().exec(schema);
 }
 
-type MissionSeed = [string, string, string, string, string, string, string[], string, string, string, string];
+type MissionSeed = [string, string, string, string, string, string, string, string[], string, string, string, string];
 
 const missions: MissionSeed[] = [
   ['VF-001', "Access another user's order", 'Test object-level authorization by manipulating an order identifier.', 'BOLA / IDOR', 'Easy', "Access a synthetic order that belongs to a different user.", 'GET /api/lab/orders/:id', ['Inspect your own order response.', 'Change only the numeric object identifier.'], 'A request and response proving cross-user access.', 'The lab query loads an order by ID without checking ownership.', 'Scope every object query to the authenticated user or authorize the requested object.', 'Repeat the modified request and confirm it returns 403 or 404.'],
@@ -42,14 +42,14 @@ const missions: MissionSeed[] = [
 function seedUsers(database: DatabaseSync): void {
   const insert = database.prepare('INSERT INTO users (email,password_hash,role) VALUES (?,?,?)');
   const profile = database.prepare('INSERT INTO profiles (user_id,display_name,bio,shipping_address) VALUES (?,?,?,?)');
-  const users = [
+  const users: Array<[string, string, string, string]> = [
     ['user1@vulnforge.local', 'User1Lab!', 'user', 'Alex Learner'],
     ['user2@vulnforge.local', 'User2Lab!', 'user', 'Morgan Tester'],
     ['support@vulnforge.local', 'SupportLab!', 'support', 'Sam Support'],
     ['admin@vulnforge.local', 'AdminLab!', 'admin', 'Avery Admin'],
   ];
   for (const [email, password, role, name] of users) {
-    const result = insert.run(email, hashPassword(password!), role);
+    const result = insert.run(email, hashPassword(password), role);
     profile.run(Number(result.lastInsertRowid), name, 'Synthetic VulnForge account', '100 Training Circuit, Lab City');
   }
 }

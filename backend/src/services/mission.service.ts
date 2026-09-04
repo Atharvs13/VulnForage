@@ -11,7 +11,7 @@ const eventMap: Record<string, string> = {
 };
 
 function transform(row: MissionRow, userId: number): MissionRow {
-  const attempt = db().prepare('SELECT status,attempt_count AS attemptCount,started_at AS startedAt,completed_at AS completedAt,evidence FROM mission_attempts WHERE mission_id=? AND user_id=?').get(row.id, userId) as MissionRow | undefined;
+  const attempt = db().prepare('SELECT status,attempt_count AS attemptCount,started_at AS startedAt,completed_at AS completedAt,evidence FROM mission_attempts WHERE mission_id=? AND user_id=?').get(String(row.id), userId) as MissionRow | undefined;
   const completed = attempt?.status === 'completed';
   return {
     ...row,

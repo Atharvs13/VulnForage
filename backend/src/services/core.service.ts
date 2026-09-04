@@ -52,7 +52,7 @@ export function createOrder(userId: number, input: unknown): Row {
     const orderId = Number(result.lastInsertRowid);
     const insert = database.prepare('INSERT INTO order_items (order_id,product_id,quantity,unit_price_cents) VALUES (?,?,?,?)');
     for (const { item, product } of products) {
-      insert.run(orderId, item.productId, item.quantity, product.priceCents);
+      insert.run(orderId, item.productId, item.quantity, Number(product.priceCents));
       database.prepare('UPDATE products SET stock=stock-? WHERE id=?').run(item.quantity, item.productId);
     }
     database.prepare('INSERT INTO payments (order_id,provider_ref,amount_cents,status) VALUES (?,?,?,?)').run(orderId, `VF-PAY-${orderId}`, total, 'captured');

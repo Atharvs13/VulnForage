@@ -4,6 +4,6 @@ export class AppError extends Error {
   }
 }
 
-export const assert = (condition: unknown, status: number, code: string, message: string): asserts condition => {
+export function assert(condition: unknown, status: number, code: string, message: string): asserts condition {
   if (!condition) throw new AppError(status, code, message);
-};
+}

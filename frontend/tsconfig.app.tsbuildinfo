@@ -1,0 +1,1 @@
+{"root":["./src/main.tsx","./src/types.ts","./src/vitest.d.ts","./src/app/App.test.tsx","./src/app/App.tsx","./src/app/AuthContext.tsx","./src/components/Layout.tsx","./src/components/Status.tsx","./src/pages/AdminPage.tsx","./src/pages/AuthPages.tsx","./src/pages/CorePages.tsx","./src/pages/MissionPages.tsx","./src/services/api.ts"],"errors":true,"version":"5.9.3"}
