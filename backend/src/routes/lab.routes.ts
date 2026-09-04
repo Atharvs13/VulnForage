@@ -12,6 +12,11 @@ import { fileUploadRouter } from '../modules/file-upload/route.js';
 import { jwtRouter } from '../modules/jwt/route.js';
 import { businessLogicRouter } from '../modules/business-logic/route.js';
 import { misconfigurationRouter } from '../modules/misconfiguration/route.js';
+import { supplyChainRouter } from '../modules/supply-chain/route.js';
+import { loggingRouter } from '../modules/logging/route.js';
+import { exceptionsRouter } from '../modules/exceptions/route.js';
+import { authFailuresRouter } from '../modules/auth-failures/route.js';
+import { cryptoRouter } from '../modules/crypto/route.js';
 
 export const labRouter = Router();
 labRouter.use((_req, _res, next) => next(config.labMode ? undefined : new AppError(404, 'LAB_DISABLED', 'Lab routes are disabled')));
@@ -20,4 +25,20 @@ labRouter.use((_req, _res, next) => next(config.labMode ? undefined : new AppErr
 labRouter.post('/sqli/login', sqliLogin);
 
 labRouter.use(requireAuth);
-labRouter.use(bolaRouter, sqliRouter, xssRouter, csrfRouter, ssrfRouter, fileUploadRouter, jwtRouter, businessLogicRouter, misconfigurationRouter);
+labRouter.use(
+  bolaRouter,
+  sqliRouter,
+  xssRouter,
+  csrfRouter,
+  ssrfRouter,
+  fileUploadRouter,
+  jwtRouter,
+  businessLogicRouter,
+  misconfigurationRouter,
+  supplyChainRouter,
+  loggingRouter,
+  exceptionsRouter,
+  authFailuresRouter,
+  cryptoRouter
+);
+
