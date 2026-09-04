@@ -16,11 +16,11 @@ adminRouter.get('/orders', (req, res) => ok(res, { orders: listOrders(req.user!.
 adminRouter.get('/tickets', (req, res) => ok(res, { tickets: listTickets(req.user!.id, true) }));
 adminRouter.get('/logs', (_req, res) => ok(res, { logs: db().prepare('SELECT * FROM admin_logs ORDER BY id DESC LIMIT 100').all() }));
 adminRouter.post('/lab/reset', (req, res) => {
-  logEvent('LAB_RESET', { requestId: req.requestId, userId: req.user!.id, route: req.path, method: req.method });
   for (const folder of ['uploads','lab-uploads']) {
     const dir = path.join(path.dirname(config.databasePath), folder); fs.mkdirSync(dir, { recursive: true });
     for (const file of fs.readdirSync(dir)) if (file !== '.gitkeep') fs.rmSync(path.join(dir, file));
   }
   reset();
+  logEvent('LAB_RESET', { requestId: req.requestId, userId: req.user!.id, route: req.path, method: req.method });
   ok(res, { reset: true, message: 'Synthetic lab state restored; sign in again because sessions were reset.' });
 });

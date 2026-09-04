@@ -1,12 +1,50 @@
+# Dependencies
 node_modules/
-dist/
+
+# Environment / secrets
 .env
-*.log
+.env.*
+!.env.example
+
+# Private keys / certificates
+*.pem
+*.key
+*.crt
+
+# Credentials
+credentials.json
+service-account*.json
+secrets.json
+
+# Build / generated files
+dist/
+build/
+coverage/
+.vite/
+.cache/
 *.tsbuildinfo
+
+# Python
+venv/
+.venv/
+__pycache__/
+*.pyc
+
+# Logs
+*.log
+logs/
+
+# Local databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Uploads / local data
+backend/data/
 data/
-backend/data/*.db*
-backend/data/uploads/*
-backend/data/lab-uploads/*
-!backend/data/uploads/.gitkeep
-!backend/data/lab-uploads/.gitkeep
+
+# OS / editors
 .DS_Store
+Thumbs.db
+.vscode/
+.idea/
