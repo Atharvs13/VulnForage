@@ -2,6 +2,8 @@ node_modules/
 dist/
 .env
 *.log
+*.tsbuildinfo
+data/
 backend/data/*.db*
 backend/data/uploads/*
 backend/data/lab-uploads/*

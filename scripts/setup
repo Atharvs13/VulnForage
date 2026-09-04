@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+npm install
+npm run db:reset
+npm run build
+echo "VulnForge setup complete. Run: npm run dev"

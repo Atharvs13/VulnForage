@@ -9,7 +9,7 @@ services:
       SESSION_SECRET: local-vulnforge-secret
       CORS_ORIGIN: http://localhost:5173
     ports:
-      - "4000:4000"
+      - "127.0.0.1:4000:4000"
     volumes:
       - vulnforge-data:/app/data
 
@@ -18,7 +18,7 @@ services:
     depends_on:
       - backend
     ports:
-      - "5173:5173"
+      - "127.0.0.1:5173:5173"
 
 volumes:
   vulnforge-data:

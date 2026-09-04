@@ -1,180 +1,29 @@
-# VulnForge Mission System
+# VulnForge Missions
 
-## Purpose
+Missions describe what to investigate without immediately revealing a payload. Status is per user: `available`, `in_progress`, `failed`, or `completed`. Starting creates an attempt; each submission increments its count. Completion requires substantive evidence plus a matching server-recorded lab event after start. Completion unlocks root cause, remediation, and retest guidance.
 
-Missions convert individual vulnerabilities into structured cybersecurity exercises.
+| ID | Title | Category | Difficulty | Target | Objective / expected evidence |
+|---|---|---|---|---|---|
+| VF-001 | Access another user's order | BOLA/IDOR | Easy | `GET /api/lab/orders/:id` | Show controlled cross-user order access |
+| VF-002 | Find the SQL injection point | SQLi | Medium | `GET /api/lab/products/search?q=` | Show altered query behavior/hidden synthetic row |
+| VF-003 | Stored XSS in support | XSS | Medium | `POST/GET /api/lab/xss/tickets` | Stored payload and unsafe lab preview context |
+| VF-004 | Controlled internal fetch | SSRF | Hard | `POST /api/lab/ssrf/fetch` | Synthetic internal-service response |
+| VF-005 | Cross-site state change | CSRF | Medium | `POST /api/lab/csrf/change-email` | Email change without anti-CSRF token |
+| VF-006 | Upload validation bypass | File Upload | Medium | `POST /api/lab/upload` | Accepted misleading double extension |
+| VF-007 | Tamper with a lab token | JWT | Hard | `GET /api/lab/jwt/profile` | Synthetic admin flag from tampered lab token |
+| VF-008 | Manipulate checkout pricing | Business Logic | Medium | `POST /api/lab/checkout` | Receipt below authoritative catalog price |
+| VF-009 | Discover exposed configuration | Misconfiguration | Easy | `GET /api/lab/debug/config` | Synthetic debug flag/config response |
 
-A mission should tell the learner **what to investigate**, not simply reveal the exploit.
+## Root causes and defenses
 
-## Mission Model
+- **VF-001:** missing object ownership scope; authorize every object server-side and retest modified IDs.
+- **VF-002:** query string concatenation; bind parameters and confirm payloads become literal data.
+- **VF-003:** unsafe HTML rendering; encode/sanitize contextually and confirm markup is inert.
+- **VF-004:** caller-selected server destination; strict parsing/allow-list/egress controls and redirect/DNS revalidation.
+- **VF-005:** cookie action lacks request-integrity proof; require session-bound tokens and origin validation.
+- **VF-006:** incomplete filename/MIME trust; canonicalize, inspect content, randomize storage, and authorize retrieval.
+- **VF-007:** algorithm/claim trust; pin algorithm, verify signature/issuer/audience/expiry, and authorize from server state.
+- **VF-008:** caller owns price; derive price/discount/workflow transitions from authoritative server data.
+- **VF-009:** debug endpoint exposed; disable outside isolated development and require proper authorization.
 
-```text
-id
-title
-description
-category
-difficulty
-objective
-target
-hints
-expected_evidence
-root_cause
-remediation
-status
-```
-
-## Mission States
-
-```text
-locked
-   ↓
-available
-   ↓
-in_progress
-   ↓
-completed
-```
-
-## Attempt Model
-
-```text
-mission_id
-user_id
-status
-evidence
-attempt_count
-started_at
-completed_at
-```
-
-## Difficulty
-
-```text
-Easy
-Medium
-Hard
-```
-
-Difficulty should describe the reasoning required, not merely the number of payloads.
-
----
-
-## Mission Lifecycle
-
-```mermaid
-flowchart TD
-    A["Mission Available"] --> B["Start Mission"]
-    B --> C["Recon / Attack"]
-    C --> D["Collect Evidence"]
-    D --> E["Submit Attempt"]
-    E --> F{ "Validator" }
-    F -->|Pass| G["Completed"]
-    F -->|Fail| H["Failed Attempt"]
-    H --> C
-    G --> I["Defense / Retest"]
-```
-
----
-
-# Starter Missions
-
-## VF-001 — Access Another User's Order
-
-**Category:** BOLA / IDOR
-
-**Difficulty:** Easy
-
-**Objective:** Identify whether an authenticated user can access another synthetic user's order by changing an object identifier.
-
-**Target:**
-
-```text
-GET /api/lab/orders/:id
-```
-
-**Evidence:** Controlled request + response showing an order belonging to another synthetic user.
-
-**Root cause:** Missing object ownership validation in the vulnerable lab implementation.
-
-**Remediation:** Enforce server-side ownership/authorization checks.
-
----
-
-## VF-002 — Find the SQL Injection Point
-
-**Category:** SQL Injection
-
-**Difficulty:** Medium
-
-**Objective:** Identify the vulnerable product-search input and demonstrate controlled database-query manipulation.
-
-**Target:**
-
-```text
-GET /api/lab/products/search?q=...
-```
-
-**Evidence:** Request/response pair demonstrating altered query behavior.
-
-**Root cause:** Unsafe query construction in the lab module.
-
-**Remediation:** Parameterized queries and proper input handling.
-
----
-
-## VF-003 — Stored XSS in Support
-
-**Category:** XSS
-
-**Difficulty:** Medium
-
-**Objective:** Identify an unsafe support-ticket rendering path and demonstrate controlled browser-side execution in the lab.
-
-**Target:**
-
-```text
-POST /api/lab/xss/tickets
-GET /api/lab/xss/tickets
-```
-
-**Evidence:** Stored payload and affected render context.
-
-**Root cause:** Unsafe output handling.
-
-**Remediation:** Context-aware output encoding/sanitization and safe rendering.
-
----
-
-## VF-004 — Controlled SSRF
-
-**Category:** SSRF
-
-**Difficulty:** Hard
-
-**Objective:** Identify the server-side fetch behavior and reach an explicitly allow-listed internal lab service.
-
-**Target:**
-
-```text
-POST /api/lab/ssrf/fetch
-```
-
-**Evidence:** Request and synthetic internal-service response.
-
-**Root cause:** Unsafe destination handling in the lab module.
-
-**Remediation:** Strict allow-listing, network egress controls, and safe URL parsing.
-
----
-
-## Evidence Strategy
-
-Evidence should normally include:
-
-- endpoint
-- method
-- relevant parameters/body
-- interesting response
-- short explanation of impact
-
-Avoid requiring real-world targets or sensitive information.
+Attack mode shows objective, target, difficulty, and allowed local scope. Guided mode reveals two progressive hints. Defense mode remains unavailable until validation. Evidence should include endpoint/method, changed input, interesting response, and a concise controlled-impact explanation—never real-world targets or secrets.

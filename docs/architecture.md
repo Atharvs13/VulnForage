@@ -1,377 +1,72 @@
 # VulnForge Architecture
 
-## 1. System Overview
-
-```mermaid
-flowchart TB
-    U["Learner / Security Tester"]
-
-    subgraph TOOLS["Testing Tools"]
-      B["Browser"]
-      BURP["Burp Suite"]
-      ZAP["OWASP ZAP"]
-      CLI["curl / Postman"]
-      RECON["Nmap / ffuf / Recon"]
-    end
-
-    subgraph FRONT["Frontend"]
-      UI["React + TypeScript + Vite"]
-      PAGES["Pages + Components"]
-      CLIENT["API Client"]
-    end
-
-    subgraph BACK["Backend"]
-      EXPRESS["Node.js + Express + TypeScript"]
-      ROUTES["Routes"]
-      CTRL["Controllers"]
-      SERVICES["Services"]
-      LAB["Intentional Vulnerability Modules"]
-    end
-
-    subgraph DATA["Local Data Layer"]
-      DB[("SQLite / Local DB")]
-      FILES["Local Lab Storage"]
-    end
-
-    U --> B
-    U --> BURP
-    U --> ZAP
-    U --> CLI
-    U --> RECON
-
-    B --> UI
-    UI --> PAGES
-    PAGES --> CLIENT
-    CLIENT --> EXPRESS
-    BURP --> EXPRESS
-    ZAP --> EXPRESS
-    CLI --> EXPRESS
-    RECON --> EXPRESS
-
-    EXPRESS --> ROUTES
-    ROUTES --> CTRL
-    CTRL --> SERVICES
-    SERVICES --> LAB
-    SERVICES --> DB
-    SERVICES --> FILES
-    LAB --> DB
-    LAB --> FILES
-```
-
----
-
-## 2. Real Request Flow
-
-```mermaid
-sequenceDiagram
-    actor L as Learner
-    participant B as Browser / Burp
-    participant F as React Frontend
-    participant A as Express API
-    participant C as Controller
-    participant S as Service
-    participant D as Local Database
-
-    L->>B: Perform action
-    B->>F: Load UI / send request
-    F->>A: HTTP request
-    A->>C: Route matched
-    C->>S: Execute operation
-    S->>D: Query / write data
-    D-->>S: Result
-    S-->>C: Application result
-    C-->>A: JSON response
-    A-->>F: HTTP response
-    F-->>B: Render result
-    B-->>L: Display result
-```
-
-When using Burp Suite:
+## Implemented system
 
 ```text
-Browser
-   │
-   ▼
-Burp Suite
-   │  modified HTTP request
-   ▼
-VulnForge API
-   │
-   ▼
-Vulnerable Module
-   │
-   ▼
-Local Database
+Untrusted learner/browser/proxy
+             │ HTTP, cookie, JSON, multipart
+             ▼
+React 19 + Router + Tailwind + Vite
+             │ services/api.ts
+             ▼
+Express 5 + TypeScript
+  request ID → CORS/JSON → session lookup → route/auth
+       ├── controllers → core services → SQLite
+       ├── mission service → event validator → SQLite
+       └── /api/lab routers → isolated lab services
+                                      ├── lab tables/settings
+                                      └── bounded upload storage
 ```
 
----
+The frontend is a static single-page client and never acts as an authorization boundary. The backend controls sessions, roles, resource ownership, core business calculations, mission state, evidence validation, reset, and structured events.
 
-## 3. Backend Request Pipeline
+## Frontend architecture
 
-```mermaid
-flowchart TD
-    HTTP["HTTP Request"] --> ROUTE["Express Route"]
-    ROUTE --> MW["Middleware"]
-    MW --> CTRL["Controller"]
-    CTRL --> SERVICE["Service"]
-    SERVICE --> LAB{ "Lab / Core Logic" }
-    LAB --> DATA[("Database")]
-    DATA --> RESULT["Result"]
-    RESULT --> SERVICE
-    SERVICE --> CTRL
-    CTRL --> RESP["HTTP Response"]
-```
+`src/app` owns routing and authentication context. `components` contains layout/status primitives. `pages` implements public/auth, core commerce/support, missions/workbenches, and admin reset. `services/api.ts` owns cookie-aware requests and normalized errors. Important pages render loading, error, empty, and success states.
 
-Middleware can provide basic request parsing, authentication/session lookup, request IDs, logging, and error handling. For lab endpoints, missing security controls are deliberate and documented rather than accidental.
+The dedicated XSS mission workbench is the only unsafe rendering context. Core support/profile content remains text-rendered.
 
----
-
-## 4. Frontend Flow
-
-```mermaid
-flowchart LR
-    USER["Learner"] --> APP["React App"]
-    APP --> ROUTER["Router"]
-    ROUTER --> PAGE["Page"]
-    PAGE --> COMPONENT["Component"]
-    COMPONENT --> API["API Client"]
-    API --> BACKEND["Express API"]
-```
-
-The frontend is **not** a security boundary.
-
-A learner can alter:
-
-- request method
-- URL
-- query parameters
-- headers
-- cookies/tokens
-- JSON body
-- hidden UI state
-
----
-
-## 5. Core Application Flow
+## Backend architecture and request flow
 
 ```text
-Register / Login
-       ↓
-Dashboard
-       ↓
-Products
-       ↓
-Cart / Checkout
-       ↓
-Orders
-       ↓
-Support
-       ↓
-Missions
+Route → authentication/role middleware → controller → service → DatabaseSync
+  └──────────────────── centralized AppError/error JSON ────────────────┘
 ```
 
-The surrounding application provides realistic context for the vulnerable labs.
+`createApp()` migrates/seeds the SQLite database idempotently, then installs request metadata, routes, 404 handling, and sanitized error handling. Every completed response records an `HTTP_REQUEST`; security and mission actions record named events without passwords, cookies, or tokens.
 
----
+## Data architecture
 
-## 6. Vulnerability Surface
+SQLite is selected by the repository contract and embedded in the backend—there is no separate database server. The schema contains users, profiles, sessions, products, orders, order items, payments, tickets, uploads, missions, attempts, admin logs, lab settings, and isolated SQLi/XSS fixture tables. Foreign keys, checks, unique constraints, and lookup indexes protect core consistency.
 
-```mermaid
-flowchart TD
-    APP["VulnForge"] --> AUTH["Authentication"]
-    APP --> AUTHZ["Authorization"]
-    APP --> INPUT["Input Handling"]
-    APP --> OUTPUT["Output Rendering"]
-    APP --> FILES["File Handling"]
-    APP --> API["API"]
-    APP --> LOGIC["Business Logic"]
-    APP --> CONFIG["Configuration"]
+Runtime state defaults to `backend/data/vulnforge.db`. Core and lab uploads live in separate non-source, non-executable directories.
 
-    AUTH --> JWT["JWT / Session Lab"]
-    AUTHZ --> BOLA["BOLA / IDOR"]
-    AUTHZ --> PRIV["Privilege Boundary"]
-    INPUT --> SQLI["SQL Injection"]
-    INPUT --> SSRF["SSRF"]
-    OUTPUT --> XSS["XSS"]
-    FILES --> UPLOAD["File Upload"]
-    API --> APISEC["API Security"]
-    LOGIC --> BL["Business Logic"]
-    CONFIG --> MISCONFIG["Misconfiguration"]
-```
+## Authentication and authorization
 
----
+Registration hashes passwords with salted scrypt. Login creates a random 256-bit opaque session identifier stored in SQLite and sent through an HTTP-only, SameSite cookie. Logout deletes it. Expiry is checked server-side. Core orders, tickets, and uploads apply ownership constraints; support/admin elevation is enforced in middleware/services. The JWT lab is unrelated to normal authentication and uses lab-only material.
 
-## 7. BOLA Workflow
+## Mission flow
 
 ```text
-Authenticated User A
-        ↓
-GET /api/lab/orders/1001
-        ↓
-Observe object identifier
-        ↓
-Change identifier
-        ↓
-GET /api/lab/orders/1002
-        ↓
-Controlled cross-user object access
-        ↓
-Evidence
-        ↓
-Mission validation
+available → POST start → in_progress → interact with lab target
+   → server records mission-specific exploit event → POST evidence attempt
+   → failed (no event) or completed → defense/retest unlocked
 ```
 
----
+Evidence text alone cannot complete a mission. The validator requires both substantive evidence and a matching backend event recorded after the attempt started.
 
-## 8. SQL Injection Workflow
+## Vulnerability boundary
 
-```text
-Learner Input
-      ↓
-Lab Search Endpoint
-      ↓
-Intentionally Unsafe Query Handling
-      ↓
-Local PostgreSQL/SQLite data
-      ↓
-Controlled Result
-      ↓
-Evidence
-```
+All deliberate weaknesses live below `backend/src/modules` and mount under `/api/lab`. Each module has a route, controller, service, README, and remediation document. Core routes do not reuse vulnerable lab logic.
 
-The vulnerable behavior should remain isolated to the SQLi lab.
+- SQLi queries only `lab_products`; SQLite single-statement preparation bounds the surface.
+- SSRF accepts one exact synthetic URL and performs no arbitrary network operation.
+- Lab files are size-limited, random-named, non-executable, and force-served as text.
+- BOLA accesses synthetic orders; CSRF changes a lab setting; business logic creates only a synthetic receipt.
+- JWT and debug values are synthetic and independent of process/production secrets.
 
----
+## Reset and deployment
 
-## 9. XSS Workflow
+CLI/API reset clears mutable rows and both upload stores, then reseeds deterministic IDs. It preserves schema/migrations and is idempotent. Sessions are intentionally cleared.
 
-```text
-Learner Input
-      ↓
-Search / Ticket / Comment
-      ↓
-Stored or Reflected Lab Data
-      ↓
-Frontend Rendering
-      ↓
-Controlled Browser-Side Impact
-```
-
----
-
-## 10. SSRF Workflow
-
-```mermaid
-flowchart LR
-    U["Learner"] --> E["SSRF Lab Endpoint"]
-    E --> F["Controlled Fetcher"]
-    F --> T["Allow-listed Local Lab Target"]
-    T --> R["Synthetic Response"]
-    R --> E
-    E --> U
-```
-
-Never allow the lab fetcher to reach arbitrary public hosts, cloud metadata, host files, production systems, or unrelated private networks.
-
----
-
-## 11. Attack Chain
-
-```mermaid
-flowchart TD
-    R["Recon"] --> E["Enumeration"]
-    E --> A["Attack Surface"]
-    A --> AUTH["Auth / AuthZ Testing"]
-    AUTH --> BOLA["BOLA / IDOR"]
-    BOLA --> INPUT["Input Vulnerability"]
-    INPUT --> IMPACT["Controlled Impact"]
-    IMPACT --> EV["Evidence"]
-    EV --> M["Mission Complete"]
-    M --> D["Defense"]
-    D --> RT["Retest"]
-```
-
----
-
-## 12. Mission Flow
-
-```mermaid
-flowchart TD
-    L["Mission List"] --> S["Select Mission"]
-    S --> ST["Start"]
-    ST --> ATT["Attack Lab"]
-    ATT --> EV["Submit Evidence"]
-    EV --> V{ "Validator" }
-    V -->|Pass| C["Completed"]
-    V -->|Fail| F["Failed Attempt"]
-    F --> ATT
-    C --> DEF["Defense / Retest"]
-```
-
----
-
-## 13. Reset Flow
-
-```text
-RESET LAB
-   ↓
-Clear temporary lab records
-   ↓
-Restore synthetic users/data
-   ↓
-Restore vulnerable fixtures
-   ↓
-Reset mission attempts
-   ↓
-Clear temporary uploads
-   ↓
-Restore lab settings
-   ↓
-Health check
-   ↓
-READY
-```
-
----
-
-## 14. Trust Boundaries
-
-```mermaid
-flowchart LR
-    A["Learner / Browser"] -->|Untrusted HTTP| F["Frontend"]
-    F -->|Untrusted HTTP / JSON| B["Backend"]
-    B -->|Controlled Access| D[("Local DB")]
-    B -->|Controlled File Access| S["Lab Storage"]
-
-    A -.->|Modified Requests| B
-    A -.->|Direct API Calls| B
-```
-
-Important boundaries:
-
-1. Browser → backend
-2. User → other user
-3. User → support/admin
-4. Lab → host
-5. Lab → network
-
----
-
-## 15. Deployment Model
-
-```mermaid
-flowchart TB
-    HOST["Local Machine / Private VM"]
-    HOST --> DOCKER["Docker Compose (optional)"]
-    DOCKER --> FRONT["Frontend"]
-    DOCKER --> BACK["Backend"]
-    BACK --> DB[("Local Database")]
-```
-
-Development may also run directly with Node.js and a local database without Docker.
-
----
-
-## 16. Guiding Principle
-
-> **Make the web application realistic, make the vulnerabilities deliberate, and keep the lab isolated.**
+Direct development runs Vite on 5173, Express on 4000, and embedded SQLite. Docker builds separate frontend/backend images and stores SQLite in a named private volume. Compose publishes only to loopback. Trust boundaries are learner→frontend, browser/proxy→backend, user→other user/role, core→lab, backend→database/storage, and lab container→host/network.
