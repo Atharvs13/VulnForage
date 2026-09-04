@@ -18,14 +18,16 @@ async function request(pathname: string, options: RequestInit = {}, cookie = use
   return { response, body, cookie: response.headers.get('set-cookie')?.split(';')[0] ?? '' };
 }
 
+describe('VulnForge integration', () => {
 before(async () => {
   process.env.DATABASE_URL = './data/test-vulnforge.db';
   const testPath = path.resolve('./data/test-vulnforge.db');
   for (const suffix of ['', '-wal', '-shm']) if (fs.existsSync(testPath + suffix)) fs.rmSync(testPath + suffix);
   const appModule = await import('../src/app.js');
   closeDatabase = (await import('../src/database/index.js')).closeDatabase;
-  server = appModule.createApp().listen(0, '127.0.0.1');
-  await new Promise<void>((resolve) => server.once('listening', resolve));
+  server = await new Promise<Server>((resolve) => {
+    const instance = appModule.createApp().listen(0, '127.0.0.1', () => resolve(instance));
+  });
   const address = server.address();
   assert(address && typeof address === 'object');
   origin = `http://127.0.0.1:${address.port}`;
@@ -108,4 +110,5 @@ describe('admin authorization and reset', () => {
     const expired = await request('/api/auth/me', {}, login.cookie); assert.equal(expired.response.status, 401);
     const products = await request('/api/products', {}, ''); assert.equal(products.body?.data.products.length, 6);
   });
+});
 });
