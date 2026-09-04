@@ -1,0 +1,266 @@
+[1mdiff --git a/backend/src/database/index.ts b/backend/src/database/index.ts[m
+[1mindex 56e1bf6..0060001 100644[m
+[1m--- a/backend/src/database/index.ts[m
+[1m+++ b/backend/src/database/index.ts[m
+[36m@@ -37,6 +37,12 @@[m [mconst missions: MissionSeed[] = [[m
+   ['VF-007', 'Tamper with a lab token', 'Study token header and claims validation.', 'JWT', 'Hard', 'Access the synthetic admin profile using a tampered lab token.', 'GET /api/lab/jwt/profile', ['Decode the token segments.', 'Inspect how the lab handles the alg claim.'], 'A lab response containing the synthetic admin-only flag.', 'The lab accepts an unsigned token when alg is none and trusts role claims.', 'Pin the expected algorithm, verify the signature, and authorize against server state.', 'Confirm unsigned and claim-tampered tokens are rejected.'],[m
+   ['VF-008', 'Manipulate checkout pricing', 'Inspect whether the checkout trusts client pricing.', 'Business Logic', 'Medium', 'Complete a synthetic checkout for less than the server catalog price.', 'POST /api/lab/checkout', ['Compare the request price with the real product price.', 'Try changing workflow values that should be server-owned.'], 'A checkout response showing a manipulated total.', 'The vulnerable workflow trusts a client-supplied unit price.', 'Calculate prices and discounts on the server and validate workflow transitions.', 'Repeat with a modified price and confirm the server uses catalog values.'],[m
+   ['VF-009', 'Discover exposed configuration', 'Enumerate the lab API for operational metadata.', 'Misconfiguration', 'Easy', 'Retrieve the synthetic debug configuration endpoint.', 'GET /api/lab/debug/config', ['Review headers and API discovery hints.', 'Look for a debug route in the lab namespace.'], 'The synthetic debug flag returned by the endpoint.', 'Debug configuration is exposed without authorization.', 'Disable debug endpoints and minimize public operational metadata.', 'Confirm the debug route is disabled or admin protected.'],[m
+[32m+[m[32m  ['VF-010', 'Login SQL Injection', 'Investigate the legacy authentication endpoint.', 'SQL Injection', 'Medium', 'Bypass authentication using SQL injection.', 'POST /api/lab/sqli/login', ['Try inputting special characters in the email field.', 'Consider how a database might interpret a single quote.'], 'A successful login response without knowing the correct password.', 'User input is concatenated directly into the authentication SQL query.', 'Use parameterized queries for all database interactions.', 'Confirm the injection payload no longer bypasses authentication.'],[m
+[32m+[m[32m  ['VF-011', 'Supply chain metadata exposure', 'Inspect vulnerable component dependency metadata.', 'Supply Chain', 'Medium', 'Discover vulnerable synthetic dependency manifest details.', 'GET /api/lab/supply-chain/manifest', ['Query the component manifest endpoint.', 'Look for unverified package version details.'], 'The synthetic vulnerable component manifest with secret flag.', 'Dependencies are exposed without vulnerability scanning or lockfile verification.', 'Verify and lock component dependencies using Software Bill of Materials (SBOM).', 'Verify component endpoints require authorization and dependency checks.'],[m
+[32m+[m[32m  ['VF-012', 'Log injection & unmonitored security', 'Test log header and body input validation against log forging.', 'Logging & Alerting', 'Medium', 'Forge a synthetic audit entry using CRLF log injection.', 'POST /api/lab/logging/event', ['Submit newlines (%0A or \\n) in log messages.', 'Inspect returned lab audit log output.'], 'A forged log line appearing in the lab audit trail.', 'User inputs are written directly into security log output without sanitization.', 'Sanitize log inputs, prevent newline injection, and establish automated security alert rules.', 'Verify newline inputs are escaped before writing to log streams.'],[m
+[32m+[m[32m  ['VF-013', 'Fail-open exception handling', 'Trigger an unhandled exception in authorization logic.', 'Exceptional Conditions', 'Hard', 'Bypass access control by passing malformed payload that triggers null exception.', 'POST /api/lab/exceptions/process', ['Send a request missing required schema attributes.', 'Observe how catch block handles null pointer.'], 'An authorized response triggered by an exceptional condition.', 'The exception handler catches null pointer and defaults to granted permission state.', 'Fail securely: default to access denied in exception handlers and catch specific errors.', 'Confirm malformed inputs return 400 or 403 instead of elevated access.'],[m
+[32m+[m[32m  ['VF-014', 'Unrestricted brute force', 'Test authentication rate limits and credential stuffing protections.', 'Authentication Failures', 'Medium', 'Bypass weak rate limit to discover valid account password.', 'POST /api/lab/auth/bruteforce', ['Send multiple password guesses in rapid succession.', 'Inspect response status across attempts.'], 'Successful credential discovery after rapid attempts.', 'Authentication endpoint lacks attempt counters or lockouts.', 'Implement account lockouts, rate limiting, and multi-factor authentication.', 'Confirm rapid failed requests trigger temporary block or lockouts.'],[m
+[32m+[m[32m  ['VF-015', 'Weak hash & key exposure', 'Investigate legacy MD5 hashing implementation.', 'Cryptographic Failures', 'Easy', 'Extract secret plain-text value from unsalted MD5 output.', 'POST /api/lab/crypto/hash', ['Inspect cryptographic response structure.', 'Identify algorithm used for secret hashing.'], 'The plaintext secret corresponding to the synthetic MD5 hash.', 'The system relies on broken unsalted MD5 hashing for secret storage.', 'Use modern salted hashing algorithms like Argon2 or bcrypt.', 'Confirm MD5 is replaced with strong key derivation functions.'][m
+ ];[m
+ [m
+ function seedUsers(database: DatabaseSync): void {[m
+[36m@@ -93,6 +99,15 @@[m [mexport function seed(): void {[m
+     labProduct.run(1, 'Training Router', 'public', 'standard fixture');[m
+     labProduct.run(2, 'Packet Analyzer', 'public', 'standard fixture');[m
+     labProduct.run(3, 'VF Internal Prototype', 'hidden', 'VF_LAB_SECRET_001');[m
+[32m+[m[32m    const labUser = database.prepare('INSERT INTO lab_users (email,password) VALUES (?,?)');[m
+[32m+[m[32m    labUser.run('legacy-admin@vulnforge.local', 'SuperSecretLabPassword123!');[m
+[32m+[m[41m    [m
+[32m+[m[32m    // Seed new lab tables[m
+[32m+[m[32m    database.prepare('INSERT INTO lab_supply_chain (package_name,version,cve,severity,description) VALUES (?,?,?,?,?)').run('vuln-pkg-core', '1.0.4-vulnerable', 'CVE-2025-0012', 'CRITICAL', 'VF_SUPPLY_CHAIN_FLAG_001');[m
+[32m+[m[32m    database.prepare('INSERT INTO lab_crypto_keys (key_name,hash_md5,plain_secret) VALUES (?,?,?)').run('lab-api-secret', '5d41402abc4b2a76b9719d911017c592', 'hello'); // md5 of hello[m
+[32m+[m[32m    database.prepare('INSERT INTO lab_security_logs (raw_log,source_ip) VALUES (?,?)').run('INFO Auth initialized', '127.0.0.1');[m
+[32m+[m[32m    database.prepare('INSERT INTO lab_exception_states (service_name,fail_mode,auth_bypass_enabled) VALUES (?,?,?)').run('legacy_evaluator', 'fail_open', 1);[m
+[32m+[m
+     database.prepare('INSERT INTO lab_settings (key,value) VALUES (?,?)').run('contact_email_user_1', 'user1@vulnforge.local');[m
+     database.prepare('INSERT INTO lab_settings (key,value) VALUES (?,?)').run('reset_version', '1');[m
+     database.exec('COMMIT');[m
+[36m@@ -110,6 +125,8 @@[m [mexport function reset(): void {[m
+     DELETE FROM uploads; DELETE FROM payments; DELETE FROM order_items; DELETE FROM orders;[m
+     DELETE FROM support_tickets; DELETE FROM profiles; DELETE FROM sessions; DELETE FROM users;[m
+     DELETE FROM products; DELETE FROM missions; DELETE FROM lab_settings; DELETE FROM lab_products;[m
+[32m+[m[32m    DELETE FROM lab_users; DELETE FROM lab_supply_chain; DELETE FROM lab_crypto_keys;[m
+[32m+[m[32m    DELETE FROM lab_security_logs; DELETE FROM lab_exception_states;[m
+     DELETE FROM sqlite_sequence;[m
+     PRAGMA foreign_keys=ON;[m
+   `);[m
+[1mdiff --git a/backend/src/database/schema.ts b/backend/src/database/schema.ts[m
+[1mindex f059974..559f644 100644[m
+[1m--- a/backend/src/database/schema.ts[m
+[1m+++ b/backend/src/database/schema.ts[m
+[36m@@ -133,4 +133,35 @@[m [mCREATE TABLE IF NOT EXISTS lab_xss_tickets ([m
+   message TEXT NOT NULL,[m
+   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP[m
+ );[m
+[32m+[m[32mCREATE TABLE IF NOT EXISTS lab_users ([m
+[32m+[m[32m  id INTEGER PRIMARY KEY AUTOINCREMENT,[m
+[32m+[m[32m  email TEXT NOT NULL UNIQUE,[m
+[32m+[m[32m  password TEXT NOT NULL[m
+[32m+[m[32m);[m
+[32m+[m[32mCREATE TABLE IF NOT EXISTS lab_supply_chain ([m
+[32m+[m[32m  id INTEGER PRIMARY KEY AUTOINCREMENT,[m
+[32m+[m[32m  package_name TEXT NOT NULL,[m
+[32m+[m[32m  version TEXT NOT NULL,[m
+[32m+[m[32m  cve TEXT NOT NULL,[m
+[32m+[m[32m  severity TEXT NOT NULL,[m
+[32m+[m[32m  description TEXT NOT NULL[m
+[32m+[m[32m);[m
+[32m+[m[32mCREATE TABLE IF NOT EXISTS lab_crypto_keys ([m
+[32m+[m[32m  id INTEGER PRIMARY KEY AUTOINCREMENT,[m
+[32m+[m[32m  key_name TEXT NOT NULL,[m
+[32m+[m[32m  hash_md5 TEXT NOT NULL,[m
+[32m+[m[32m  plain_secret TEXT NOT NULL[m
+[32m+[m[32m);[m
+[32m+[m[32mCREATE TABLE IF NOT EXISTS lab_security_logs ([m
+[32m+[m[32m  id INTEGER PRIMARY KEY AUTOINCREMENT,[m
+[32m+[m[32m  raw_log TEXT NOT NULL,[m
+[32m+[m[32m  source_ip TEXT NOT NULL,[m
+[32m+[m[32m  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP[m
+[32m+[m[32m);[m
+[32m+[m[32mCREATE TABLE IF NOT EXISTS lab_exception_states ([m
+[32m+[m[32m  id INTEGER PRIMARY KEY AUTOINCREMENT,[m
+[32m+[m[32m  service_name TEXT NOT NULL,[m
+[32m+[m[32m  fail_mode TEXT NOT NULL,[m
+[32m+[m[32m  auth_bypass_enabled INTEGER NOT NULL DEFAULT 1[m
+[32m+[m[32m);[m
+ `;[m
+[1mdiff --git a/backend/src/modules/sqli/controller.ts b/backend/src/modules/sqli/controller.ts[m
+[1mindex f8ad261..cf72b4b 100644[m
+[1m--- a/backend/src/modules/sqli/controller.ts[m
+[1m+++ b/backend/src/modules/sqli/controller.ts[m
+[36m@@ -1,2 +1,7 @@[m
+[31m-import type { Request, Response } from 'express'; import { ok } from '../../utils/http.js'; import { vulnerableSearch } from './service.js';[m
+[32m+[m[32mimport type { Request, Response } from 'express'; import { ok } from '../../utils/http.js'; import { vulnerableSearch, vulnerableLogin } from './service.js';[m
+ export const search = (req: Request, res: Response) => ok(res, { ...vulnerableSearch(String(req.query.q ?? ''), req.user!.id), lab: { intentionallyVulnerable: true } });[m
+[32m+[m[32mexport const login = (req: Request, res: Response) => {[m
+[32m+[m[32m  const result = vulnerableLogin(String(req.body.email ?? ''), String(req.body.password ?? ''), req.user?.id);[m
+[32m+[m[32m  if (result.error) return res.status(401).json({ success: false, error: { message: result.error, code: 'AUTH_FAILED' } });[m
+[32m+[m[32m  return ok(res, { ...result, lab: { intentionallyVulnerable: true } });[m
+[32m+[m[32m};[m
+[1mdiff --git a/backend/src/modules/sqli/route.ts b/backend/src/modules/sqli/route.ts[m
+[1mindex 1573df9..35539e3 100644[m
+[1m--- a/backend/src/modules/sqli/route.ts[m
+[1m+++ b/backend/src/modules/sqli/route.ts[m
+[36m@@ -1 +1 @@[m
+[31m-import { Router } from 'express'; import { search } from './controller.js'; export const sqliRouter = Router(); sqliRouter.get('/products/search', search);[m
+[32m+[m[32mimport { Router } from 'express'; import { search, login } from './controller.js'; export const sqliRouter = Router(); sqliRouter.get('/products/search', search); sqliRouter.post('/sqli/login', login);[m
+[1mdiff --git a/backend/src/modules/sqli/service.ts b/backend/src/modules/sqli/service.ts[m
+[1mindex 6fb5685..7b8a90d 100644[m
+[1m--- a/backend/src/modules/sqli/service.ts[m
+[1m+++ b/backend/src/modules/sqli/service.ts[m
+[36m@@ -6,3 +6,18 @@[m [mexport function vulnerableSearch(q: string, userId: number) {[m
+   if (rows.length > 2 || rows.some((row) => (row as Record<string, unknown>).category === 'hidden')) logEvent('LAB_SQLI_EXPLOITED', { userId, metadata: { resultCount: rows.length } });[m
+   return { rows, queryShape: 'lab product name search' };[m
+ }[m
+[32m+[m
+[32m+[m[32mexport function vulnerableLogin(email: string, password: string, userId?: number) {[m
+[32m+[m[32m  // Intentionally unsafe inside this synthetic, dedicated table only.[m
+[32m+[m[32m  const sql = `SELECT id, email FROM lab_users WHERE email = '${email}' AND password = '${password}'`;[m
+[32m+[m[32m  try {[m
+[32m+[m[32m    const row = db().prepare(sql).get() as { id: number, email: string } | undefined;[m
+[32m+[m[32m    if (row) {[m
+[32m+[m[32m      if (email.includes("'")) logEvent('LAB_SQLI_LOGIN_EXPLOITED', { userId, metadata: { email } });[m
+[32m+[m[32m      return { user: { id: row.id, email: row.email } };[m
+[32m+[m[32m    }[m
+[32m+[m[32m    return { error: 'Invalid legacy credentials' };[m
+[32m+[m[32m  } catch (e) {[m
+[32m+[m[32m    return { error: 'Database error' };[m
+[32m+[m[32m  }[m
+[32m+[m[32m}[m
+[1mdiff --git a/backend/src/routes/lab.routes.ts b/backend/src/routes/lab.routes.ts[m
+[1mindex 7c104b5..1375aab 100644[m
+[1m--- a/backend/src/routes/lab.routes.ts[m
+[1m+++ b/backend/src/routes/lab.routes.ts[m
+[36m@@ -4,6 +4,7 @@[m [mimport { requireAuth } from '../middleware/auth.js';[m
+ import { AppError } from '../utils/errors.js';[m
+ import { bolaRouter } from '../modules/bola/route.js';[m
+ import { sqliRouter } from '../modules/sqli/route.js';[m
+[32m+[m[32mimport { login as sqliLogin } from '../modules/sqli/controller.js';[m
+ import { xssRouter } from '../modules/xss/route.js';[m
+ import { csrfRouter } from '../modules/csrf/route.js';[m
+ import { ssrfRouter } from '../modules/ssrf/route.js';[m
+[36m@@ -14,5 +15,9 @@[m [mimport { misconfigurationRouter } from '../modules/misconfiguration/route.js';[m
+ [m
+ export const labRouter = Router();[m
+ labRouter.use((_req, _res, next) => next(config.labMode ? undefined : new AppError(404, 'LAB_DISABLED', 'Lab routes are disabled')));[m
+[32m+[m
+[32m+[m[32m// Public lab routes[m
+[32m+[m[32mlabRouter.post('/sqli/login', sqliLogin);[m
+[32m+[m
+ labRouter.use(requireAuth);[m
+ labRouter.use(bolaRouter, sqliRouter, xssRouter, csrfRouter, ssrfRouter, fileUploadRouter, jwtRouter, businessLogicRouter, misconfigurationRouter);[m
+[1mdiff --git a/backend/src/services/log.service.ts b/backend/src/services/log.service.ts[m
+[1mindex 798db7d..6a5d03b 100644[m
+[1m--- a/backend/src/services/log.service.ts[m
+[1m+++ b/backend/src/services/log.service.ts[m
+[36m@@ -6,5 +6,5 @@[m [mexport function logEvent(eventType: string, values: { requestId?: string; userId[m
+ }[m
+ [m
+ export function hasEvent(userId: number, eventType: string, since: string): boolean {[m
+[31m-  return Boolean(db().prepare('SELECT 1 FROM admin_logs WHERE user_id=? AND event_type=? AND timestamp>=? LIMIT 1').get(userId, eventType, since));[m
+[32m+[m[32m  return Boolean(db().prepare('SELECT 1 FROM admin_logs WHERE (user_id=? OR user_id IS NULL) AND event_type=? AND timestamp>=? LIMIT 1').get(userId, eventType, since));[m
+ }[m
+[1mdiff --git a/backend/src/services/mission.service.ts b/backend/src/services/mission.service.ts[m
+[1mindex af4380f..18b37df 100644[m
+[1m--- a/backend/src/services/mission.service.ts[m
+[1m+++ b/backend/src/services/mission.service.ts[m
+[36m@@ -8,6 +8,7 @@[m [mconst eventMap: Record<string, string> = {[m
+   'VF-001': 'LAB_BOLA_EXPLOITED', 'VF-002': 'LAB_SQLI_EXPLOITED', 'VF-003': 'LAB_XSS_STORED',[m
+   'VF-004': 'LAB_SSRF_INTERNAL', 'VF-005': 'LAB_CSRF_CHANGED', 'VF-006': 'LAB_UPLOAD_BYPASS',[m
+   'VF-007': 'LAB_JWT_ADMIN', 'VF-008': 'LAB_LOGIC_PRICE', 'VF-009': 'LAB_CONFIG_EXPOSED',[m
+[32m+[m[32m  'VF-010': 'LAB_SQLI_LOGIN_EXPLOITED',[m
+ };[m
+ [m
+ function transform(row: MissionRow, userId: number): MissionRow {[m
+[1mdiff --git a/docs/api.md b/docs/api.md[m
+[1mindex f1da9be..ae4ff54 100644[m
+[1m--- a/docs/api.md[m
+[1m+++ b/docs/api.md[m
+[36m@@ -54,6 +54,7 @@[m [mAll require a normal session and `LAB_MODE=true`.[m
+ |---|---|---|[m
+ | BOLA | GET `/api/lab/orders/:id` | No owner scope |[m
+ | SQLi | GET `/api/lab/products/search?q=` | Concatenation into dedicated `lab_products` query |[m
+[32m+[m[32m| SQLi | POST `/api/lab/sqli/login` | Concatenation into dedicated `lab_users` query |[m
+ | XSS | GET `/api/lab/xss/search?q=` | Reflected unsafe-lab value |[m
+ | XSS | POST/GET `/api/lab/xss/tickets` | Stored unsafe-lab messages |[m
+ | CSRF | POST `/api/lab/csrf/change-email` | `{email}` without anti-CSRF token |[m
+[1mdiff --git a/docs/missions.md b/docs/missions.md[m
+[1mindex c1500ea..1aae530 100644[m
+[1m--- a/docs/missions.md[m
+[1m+++ b/docs/missions.md[m
+[36m@@ -13,6 +13,7 @@[m [mMissions describe what to investigate without immediately revealing a payload. S[m
+ | VF-007 | Tamper with a lab token | JWT | Hard | `GET /api/lab/jwt/profile` | Synthetic admin flag from tampered lab token |[m
+ | VF-008 | Manipulate checkout pricing | Business Logic | Medium | `POST /api/lab/checkout` | Receipt below authoritative catalog price |[m
+ | VF-009 | Discover exposed configuration | Misconfiguration | Easy | `GET /api/lab/debug/config` | Synthetic debug flag/config response |[m
+[32m+[m[32m| VF-010 | Login SQL Injection | SQLi | Medium | `POST /api/lab/sqli/login` | Bypass authentication using SQL injection |[m
+ [m
+ ## Root causes and defenses[m
+ [m
+[36m@@ -25,5 +26,6 @@[m [mMissions describe what to investigate without immediately revealing a payload. S[m
+ - **VF-007:** algorithm/claim trust; pin algorithm, verify signature/issuer/audience/expiry, and authorize from server state.[m
+ - **VF-008:** caller owns price; derive price/discount/workflow transitions from authoritative server data.[m
+ - **VF-009:** debug endpoint exposed; disable outside isolated development and require proper authorization.[m
+[32m+[m[32m- **VF-010:** unsafe query concatenation in authentication logic; use parameterized queries and avoid string concatenation.[m
+ [m
+ Attack mode shows objective, target, difficulty, and allowed local scope. Guided mode reveals two progressive hints. Defense mode remains unavailable until validation. Evidence should include endpoint/method, changed input, interesting response, and a concise controlled-impact explanation—never real-world targets or secrets.[m
+[1mdiff --git a/frontend/src/pages/AuthPages.tsx b/frontend/src/pages/AuthPages.tsx[m
+[1mindex 9c77df1..06f9f6b 100644[m
+[1m--- a/frontend/src/pages/AuthPages.tsx[m
+[1m+++ b/frontend/src/pages/AuthPages.tsx[m
+[36m@@ -1,4 +1,58 @@[m
+[31m-import{useState,type FormEvent}from'react';import{Link,Navigate,useNavigate}from'react-router-dom';import{useAuth}from'../app/AuthContext';import{ErrorBox}from'../components/Status';[m
+[32m+[m[32mimport{useState,type FormEvent}from'react';import{Link,Navigate,useNavigate}from'react-router-dom';import{useAuth}from'../app/AuthContext';import{ErrorBox}from'../components/Status';import{api}from'../services/api';[m
+ export function Landing(){const{user}=useAuth();if(user)return <Navigate to="/dashboard" replace/>;return <main className="mx-auto flex min-h-screen max-w-7xl flex-col justify-center px-6 py-20"><p className="eyebrow">Authorized systems training / local range</p><h1 className="mt-5 max-w-4xl text-5xl font-semibold leading-[.95] tracking-[-.05em] sm:text-7xl">Break the application.<br/><span className="text-acid">Understand the defense.</span></h1><p className="mt-7 max-w-2xl text-lg leading-8 text-muted">A realistic commerce and support platform with deliberate, isolated vulnerabilities. Recon, exploit synthetic targets, submit evidence, remediate, and reset.</p><div className="mt-9 flex gap-3"><Link className="btn" to="/login">Enter the range</Link><Link className="btn-ghost" to="/register">Create learner account</Link></div><div className="mt-16 grid max-w-3xl grid-cols-3 gap-3 font-mono text-xs uppercase tracking-wider text-muted"><div className="card"><b className="text-2xl text-white">09</b><br/>isolated labs</div><div className="card"><b className="text-2xl text-white">100%</b><br/>synthetic data</div><div className="card"><b className="text-2xl text-white">LOCAL</b><br/>scope boundary</div></div></main>}[m
+[31m-function AuthForm({mode}:{mode:'login'|'register'}){const{user,login,register}=useAuth();const navigate=useNavigate();const[email,setEmail]=useState(mode==='login'?'user1@vulnforge.local':'');const[password,setPassword]=useState(mode==='login'?'User1Lab!':'');const[name,setName]=useState('');const[error,setError]=useState<unknown>();const[busy,setBusy]=useState(false);if(user)return <Navigate to="/dashboard" replace/>;async function submit(e:FormEvent){e.preventDefault();setBusy(true);setError(undefined);try{if(mode==='login')await login(email,password);else await register(email,password,name);navigate('/dashboard')}catch(err){setError(err)}finally{setBusy(false)}}return <main className="grid min-h-screen place-items-center px-4"><form className="card w-full max-w-md space-y-5" onSubmit={submit}><div><Link to="/" className="eyebrow">← VulnForge</Link><h1 className="mt-3 text-3xl font-semibold">{mode==='login'?'Resume operation':'Provision learner'}</h1><p className="mt-2 text-sm text-muted">Lab-only identities. Never use real credentials.</p></div>{error?<ErrorBox error={error}/>:null} {mode==='register'&&<label><span className="label">Display name</span><input className="input" required minLength={2} value={name} onChange={e=>setName(e.target.value)}/></label>}<label><span className="label">Email</span><input className="input" type="email" required value={email} onChange={e=>setEmail(e.target.value)}/></label><label><span className="label">Password</span><input className="input" type="password" required minLength={10} value={password} onChange={e=>setPassword(e.target.value)}/></label><button className="btn w-full" disabled={busy}>{busy?'Authenticating…':mode==='login'?'Sign in':'Register'}</button><p className="text-center text-sm text-muted">{mode==='login'?<>New here? <Link className="text-cyan" to="/register">Create an account</Link></>:<>Already provisioned? <Link className="text-cyan" to="/login">Sign in</Link></>}</p></form></main>}[m
+[32m+[m[32mfunction AuthForm({mode}:{mode:'login'|'register'}){[m
+[32m+[m[32m  const{user,login,register}=useAuth();[m
+[32m+[m[32m  const navigate=useNavigate();[m
+[32m+[m[32m  const[email,setEmail]=useState(mode==='login'?'user1@vulnforge.local':'');[m
+[32m+[m[32m  const[password,setPassword]=useState(mode==='login'?'User1Lab!':'');[m
+[32m+[m[32m  const[name,setName]=useState('');[m
+[32m+[m[32m  const[error,setError]=useState<unknown>();[m
+[32m+[m[32m  const[busy,setBusy]=useState(false);[m
+[32m+[m[32m  const[useLegacy,setUseLegacy]=useState(false);[m
+[32m+[m
+[32m+[m[32m  if(user)return <Navigate to="/dashboard" replace/>;[m
+[32m+[m
+[32m+[m[32m  async function submit(e:FormEvent){[m
+[32m+[m[32m    e.preventDefault();[m
+[32m+[m[32m    setBusy(true);[m
+[32m+[m[32m    setError(undefined);[m
+[32m+[m[32m    try{[m
+[32m+[m[32m      if(mode==='login') {[m
+[32m+[m[32m        if (useLegacy) {[m
+[32m+[m[32m          const res = await api('/api/lab/sqli/login', { method: 'POST', body: JSON.stringify({ email, password }) }) as { user?: { email: string } };[m
+[32m+[m[32m          setError(new Error(`Legacy Auth Bypassed: Welcome ${res.user?.email}`));[m
+[32m+[m[32m        } else {[m
+[32m+[m[32m          await login(email,password);[m
+[32m+[m[32m          navigate('/dashboard');[m
+[32m+[m[32m        }[m
+[32m+[m[32m      } else {[m
+[32m+[m[32m        await register(email,password,name);[m
+[32m+[m[32m        navigate('/dashboard');[m
+[32m+[m[32m      }[m
+[32m+[m[32m    }catch(err){[m
+[32m+[m[32m      setError(err);[m
+[32m+[m[32m    }finally{[m
+[32m+[m[32m      setBusy(false);[m
+[32m+[m[32m    }[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  return ([m
+[32m+[m[32m    <main className="grid min-h-screen place-items-center px-4">[m
+[32m+[m[32m      <form className="card w-full max-w-md space-y-5" onSubmit={submit}>[m
+[32m+[m[32m        <div>[m
+[32m+[m[32m          <Link to="/" className="eyebrow">← VulnForge</Link>[m
+[32m+[m[32m          <h1 className="mt-3 text-3xl font-semibold">{mode==='login'?'Resume operation':'Provision learner'}</h1>[m
+[32m+[m[32m          <p className="mt-2 text-sm text-muted">Lab-only identities. Never use real credentials.</p>[m
+[32m+[m[32m        </div>[m
+[32m+[m[32m        {error?<ErrorBox error={error}/>:null}[m
+[32m+[m[32m        {mode==='register'&&<label><span className="label">Display name</span><input className="input" required minLength={2} value={name} onChange={e=>setName(e.target.value)}/></label>}[m
+[32m+[m[32m        <label><span className="label">Email</span><input className="input" type={useLegacy ? 'text' : 'email'} required value={email} onChange={e=>setEmail(e.target.value)}/></label>[m
+[32m+[m[32m        <label><span className="label">Password</span><input className="input" type="password" required={!useLegacy} minLength={useLegacy ? 1 : 10} value={password} onChange={e=>setPassword(e.target.value)}/></label>[m
+[32m+[m[32m        {mode==='login'&&<label className="flex items-center gap-2"><input type="checkbox" checked={useLegacy} onChange={e=>setUseLegacy(e.target.checked)}/> <span className="text-sm text-muted">Use legacy authentication API</span></label>}[m
+[32m+[m[32m        <button className="btn w-full" disabled={busy}>{busy?'Authenticating…':mode==='login'?'Sign in':'Register'}</button>[m
+[32m+[m[32m        <p className="text-center text-sm text-muted">{mode==='login'?<>New here? <Link className="text-cyan" to="/register">Create an account</Link></>:<>Already provisioned? <Link className="text-cyan" to="/login">Sign in</Link></>}</p>[m
+[32m+[m[32m      </form>[m
+[32m+[m[32m    </main>[m
+[32m+[m[32m  );[m
+[32m+[m[32m}[m
+ export const Login=()=> <AuthForm mode="login"/>;export const Register=()=> <AuthForm mode="register"/>;[m

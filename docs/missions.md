@@ -13,6 +13,7 @@ Missions describe what to investigate without immediately revealing a payload. S
 | VF-007 | Tamper with a lab token | JWT | Hard | `GET /api/lab/jwt/profile` | Synthetic admin flag from tampered lab token |
 | VF-008 | Manipulate checkout pricing | Business Logic | Medium | `POST /api/lab/checkout` | Receipt below authoritative catalog price |
 | VF-009 | Discover exposed configuration | Misconfiguration | Easy | `GET /api/lab/debug/config` | Synthetic debug flag/config response |
+| VF-010 | Login SQL Injection | SQLi | Medium | `POST /api/lab/sqli/login` | Bypass authentication using SQL injection |
 
 ## Root causes and defenses
 
@@ -25,5 +26,6 @@ Missions describe what to investigate without immediately revealing a payload. S
 - **VF-007:** algorithm/claim trust; pin algorithm, verify signature/issuer/audience/expiry, and authorize from server state.
 - **VF-008:** caller owns price; derive price/discount/workflow transitions from authoritative server data.
 - **VF-009:** debug endpoint exposed; disable outside isolated development and require proper authorization.
+- **VF-010:** unsafe query concatenation in authentication logic; use parameterized queries and avoid string concatenation.
 
 Attack mode shows objective, target, difficulty, and allowed local scope. Guided mode reveals two progressive hints. Defense mode remains unavailable until validation. Evidence should include endpoint/method, changed input, interesting response, and a concise controlled-impact explanation—never real-world targets or secrets.

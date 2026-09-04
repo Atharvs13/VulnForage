@@ -1,4 +1,58 @@
-import{useState,type FormEvent}from'react';import{Link,Navigate,useNavigate}from'react-router-dom';import{useAuth}from'../app/AuthContext';import{ErrorBox}from'../components/Status';
+import{useState,type FormEvent}from'react';import{Link,Navigate,useNavigate}from'react-router-dom';import{useAuth}from'../app/AuthContext';import{ErrorBox}from'../components/Status';import{api}from'../services/api';
 export function Landing(){const{user}=useAuth();if(user)return <Navigate to="/dashboard" replace/>;return <main className="mx-auto flex min-h-screen max-w-7xl flex-col justify-center px-6 py-20"><p className="eyebrow">Authorized systems training / local range</p><h1 className="mt-5 max-w-4xl text-5xl font-semibold leading-[.95] tracking-[-.05em] sm:text-7xl">Break the application.<br/><span className="text-acid">Understand the defense.</span></h1><p className="mt-7 max-w-2xl text-lg leading-8 text-muted">A realistic commerce and support platform with deliberate, isolated vulnerabilities. Recon, exploit synthetic targets, submit evidence, remediate, and reset.</p><div className="mt-9 flex gap-3"><Link className="btn" to="/login">Enter the range</Link><Link className="btn-ghost" to="/register">Create learner account</Link></div><div className="mt-16 grid max-w-3xl grid-cols-3 gap-3 font-mono text-xs uppercase tracking-wider text-muted"><div className="card"><b className="text-2xl text-white">09</b><br/>isolated labs</div><div className="card"><b className="text-2xl text-white">100%</b><br/>synthetic data</div><div className="card"><b className="text-2xl text-white">LOCAL</b><br/>scope boundary</div></div></main>}
-function AuthForm({mode}:{mode:'login'|'register'}){const{user,login,register}=useAuth();const navigate=useNavigate();const[email,setEmail]=useState(mode==='login'?'user1@vulnforge.local':'');const[password,setPassword]=useState(mode==='login'?'User1Lab!':'');const[name,setName]=useState('');const[error,setError]=useState<unknown>();const[busy,setBusy]=useState(false);if(user)return <Navigate to="/dashboard" replace/>;async function submit(e:FormEvent){e.preventDefault();setBusy(true);setError(undefined);try{if(mode==='login')await login(email,password);else await register(email,password,name);navigate('/dashboard')}catch(err){setError(err)}finally{setBusy(false)}}return <main className="grid min-h-screen place-items-center px-4"><form className="card w-full max-w-md space-y-5" onSubmit={submit}><div><Link to="/" className="eyebrow">← VulnForge</Link><h1 className="mt-3 text-3xl font-semibold">{mode==='login'?'Resume operation':'Provision learner'}</h1><p className="mt-2 text-sm text-muted">Lab-only identities. Never use real credentials.</p></div>{error?<ErrorBox error={error}/>:null} {mode==='register'&&<label><span className="label">Display name</span><input className="input" required minLength={2} value={name} onChange={e=>setName(e.target.value)}/></label>}<label><span className="label">Email</span><input className="input" type="email" required value={email} onChange={e=>setEmail(e.target.value)}/></label><label><span className="label">Password</span><input className="input" type="password" required minLength={10} value={password} onChange={e=>setPassword(e.target.value)}/></label><button className="btn w-full" disabled={busy}>{busy?'Authenticating…':mode==='login'?'Sign in':'Register'}</button><p className="text-center text-sm text-muted">{mode==='login'?<>New here? <Link className="text-cyan" to="/register">Create an account</Link></>:<>Already provisioned? <Link className="text-cyan" to="/login">Sign in</Link></>}</p></form></main>}
+function AuthForm({mode}:{mode:'login'|'register'}){
+  const{user,login,register}=useAuth();
+  const navigate=useNavigate();
+  const[email,setEmail]=useState(mode==='login'?'user1@vulnforge.local':'');
+  const[password,setPassword]=useState(mode==='login'?'User1Lab!':'');
+  const[name,setName]=useState('');
+  const[error,setError]=useState<unknown>();
+  const[busy,setBusy]=useState(false);
+  const[useLegacy,setUseLegacy]=useState(false);
+
+  if(user)return <Navigate to="/dashboard" replace/>;
+
+  async function submit(e:FormEvent){
+    e.preventDefault();
+    setBusy(true);
+    setError(undefined);
+    try{
+      if(mode==='login') {
+        if (useLegacy) {
+          const res = await api('/api/lab/sqli/login', { method: 'POST', body: JSON.stringify({ email, password }) }) as { user?: { email: string } };
+          setError(new Error(`Legacy Auth Bypassed: Welcome ${res.user?.email}`));
+        } else {
+          await login(email,password);
+          navigate('/dashboard');
+        }
+      } else {
+        await register(email,password,name);
+        navigate('/dashboard');
+      }
+    }catch(err){
+      setError(err);
+    }finally{
+      setBusy(false);
+    }
+  }
+
+  return (
+    <main className="grid min-h-screen place-items-center px-4">
+      <form className="card w-full max-w-md space-y-5" onSubmit={submit}>
+        <div>
+          <Link to="/" className="eyebrow">← VulnForge</Link>
+          <h1 className="mt-3 text-3xl font-semibold">{mode==='login'?'Resume operation':'Provision learner'}</h1>
+          <p className="mt-2 text-sm text-muted">Lab-only identities. Never use real credentials.</p>
+        </div>
+        {error?<ErrorBox error={error}/>:null}
+        {mode==='register'&&<label><span className="label">Display name</span><input className="input" required minLength={2} value={name} onChange={e=>setName(e.target.value)}/></label>}
+        <label><span className="label">Email</span><input className="input" type={useLegacy ? 'text' : 'email'} required value={email} onChange={e=>setEmail(e.target.value)}/></label>
+        <label><span className="label">Password</span><input className="input" type="password" required={!useLegacy} minLength={useLegacy ? 1 : 10} value={password} onChange={e=>setPassword(e.target.value)}/></label>
+        {mode==='login'&&<label className="flex items-center gap-2"><input type="checkbox" checked={useLegacy} onChange={e=>setUseLegacy(e.target.checked)}/> <span className="text-sm text-muted">Use legacy authentication API</span></label>}
+        <button className="btn w-full" disabled={busy}>{busy?'Authenticating…':mode==='login'?'Sign in':'Register'}</button>
+        <p className="text-center text-sm text-muted">{mode==='login'?<>New here? <Link className="text-cyan" to="/register">Create an account</Link></>:<>Already provisioned? <Link className="text-cyan" to="/login">Sign in</Link></>}</p>
+      </form>
+    </main>
+  );
+}
 export const Login=()=> <AuthForm mode="login"/>;export const Register=()=> <AuthForm mode="register"/>;

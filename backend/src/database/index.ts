@@ -37,6 +37,12 @@ const missions: MissionSeed[] = [
   ['VF-007', 'Tamper with a lab token', 'Study token header and claims validation.', 'JWT', 'Hard', 'Access the synthetic admin profile using a tampered lab token.', 'GET /api/lab/jwt/profile', ['Decode the token segments.', 'Inspect how the lab handles the alg claim.'], 'A lab response containing the synthetic admin-only flag.', 'The lab accepts an unsigned token when alg is none and trusts role claims.', 'Pin the expected algorithm, verify the signature, and authorize against server state.', 'Confirm unsigned and claim-tampered tokens are rejected.'],
   ['VF-008', 'Manipulate checkout pricing', 'Inspect whether the checkout trusts client pricing.', 'Business Logic', 'Medium', 'Complete a synthetic checkout for less than the server catalog price.', 'POST /api/lab/checkout', ['Compare the request price with the real product price.', 'Try changing workflow values that should be server-owned.'], 'A checkout response showing a manipulated total.', 'The vulnerable workflow trusts a client-supplied unit price.', 'Calculate prices and discounts on the server and validate workflow transitions.', 'Repeat with a modified price and confirm the server uses catalog values.'],
   ['VF-009', 'Discover exposed configuration', 'Enumerate the lab API for operational metadata.', 'Misconfiguration', 'Easy', 'Retrieve the synthetic debug configuration endpoint.', 'GET /api/lab/debug/config', ['Review headers and API discovery hints.', 'Look for a debug route in the lab namespace.'], 'The synthetic debug flag returned by the endpoint.', 'Debug configuration is exposed without authorization.', 'Disable debug endpoints and minimize public operational metadata.', 'Confirm the debug route is disabled or admin protected.'],
+  ['VF-010', 'Login SQL Injection', 'Investigate the legacy authentication endpoint.', 'SQL Injection', 'Medium', 'Bypass authentication using SQL injection.', 'POST /api/lab/sqli/login', ['Try inputting special characters in the email field.', 'Consider how a database might interpret a single quote.'], 'A successful login response without knowing the correct password.', 'User input is concatenated directly into the authentication SQL query.', 'Use parameterized queries for all database interactions.', 'Confirm the injection payload no longer bypasses authentication.'],
+  ['VF-011', 'Supply chain metadata exposure', 'Inspect vulnerable component dependency metadata.', 'Supply Chain', 'Medium', 'Discover vulnerable synthetic dependency manifest details.', 'GET /api/lab/supply-chain/manifest', ['Query the component manifest endpoint.', 'Look for unverified package version details.'], 'The synthetic vulnerable component manifest with secret flag.', 'Dependencies are exposed without vulnerability scanning or lockfile verification.', 'Verify and lock component dependencies using Software Bill of Materials (SBOM).', 'Verify component endpoints require authorization and dependency checks.'],
+  ['VF-012', 'Log injection & unmonitored security', 'Test log header and body input validation against log forging.', 'Logging & Alerting', 'Medium', 'Forge a synthetic audit entry using CRLF log injection.', 'POST /api/lab/logging/event', ['Submit newlines (%0A or \\n) in log messages.', 'Inspect returned lab audit log output.'], 'A forged log line appearing in the lab audit trail.', 'User inputs are written directly into security log output without sanitization.', 'Sanitize log inputs, prevent newline injection, and establish automated security alert rules.', 'Verify newline inputs are escaped before writing to log streams.'],
+  ['VF-013', 'Fail-open exception handling', 'Trigger an unhandled exception in authorization logic.', 'Exceptional Conditions', 'Hard', 'Bypass access control by passing malformed payload that triggers null exception.', 'POST /api/lab/exceptions/process', ['Send a request missing required schema attributes.', 'Observe how catch block handles null pointer.'], 'An authorized response triggered by an exceptional condition.', 'The exception handler catches null pointer and defaults to granted permission state.', 'Fail securely: default to access denied in exception handlers and catch specific errors.', 'Confirm malformed inputs return 400 or 403 instead of elevated access.'],
+  ['VF-014', 'Unrestricted brute force', 'Test authentication rate limits and credential stuffing protections.', 'Authentication Failures', 'Medium', 'Bypass weak rate limit to discover valid account password.', 'POST /api/lab/auth/bruteforce', ['Send multiple password guesses in rapid succession.', 'Inspect response status across attempts.'], 'Successful credential discovery after rapid attempts.', 'Authentication endpoint lacks attempt counters or lockouts.', 'Implement account lockouts, rate limiting, and multi-factor authentication.', 'Confirm rapid failed requests trigger temporary block or lockouts.'],
+  ['VF-015', 'Weak hash & key exposure', 'Investigate legacy MD5 hashing implementation.', 'Cryptographic Failures', 'Easy', 'Extract secret plain-text value from unsalted MD5 output.', 'POST /api/lab/crypto/hash', ['Inspect cryptographic response structure.', 'Identify algorithm used for secret hashing.'], 'The plaintext secret corresponding to the synthetic MD5 hash.', 'The system relies on broken unsalted MD5 hashing for secret storage.', 'Use modern salted hashing algorithms like Argon2 or bcrypt.', 'Confirm MD5 is replaced with strong key derivation functions.']
 ];
 
 function seedUsers(database: DatabaseSync): void {
@@ -93,6 +99,15 @@ export function seed(): void {
     labProduct.run(1, 'Training Router', 'public', 'standard fixture');
     labProduct.run(2, 'Packet Analyzer', 'public', 'standard fixture');
     labProduct.run(3, 'VF Internal Prototype', 'hidden', 'VF_LAB_SECRET_001');
+    const labUser = database.prepare('INSERT INTO lab_users (email,password) VALUES (?,?)');
+    labUser.run('legacy-admin@vulnforge.local', 'SuperSecretLabPassword123!');
+    
+    // Seed new lab tables
+    database.prepare('INSERT INTO lab_supply_chain (package_name,version,cve,severity,description) VALUES (?,?,?,?,?)').run('vuln-pkg-core', '1.0.4-vulnerable', 'CVE-2025-0012', 'CRITICAL', 'VF_SUPPLY_CHAIN_FLAG_001');
+    database.prepare('INSERT INTO lab_crypto_keys (key_name,hash_md5,plain_secret) VALUES (?,?,?)').run('lab-api-secret', '5d41402abc4b2a76b9719d911017c592', 'hello'); // md5 of hello
+    database.prepare('INSERT INTO lab_security_logs (raw_log,source_ip) VALUES (?,?)').run('INFO Auth initialized', '127.0.0.1');
+    database.prepare('INSERT INTO lab_exception_states (service_name,fail_mode,auth_bypass_enabled) VALUES (?,?,?)').run('legacy_evaluator', 'fail_open', 1);
+
     database.prepare('INSERT INTO lab_settings (key,value) VALUES (?,?)').run('contact_email_user_1', 'user1@vulnforge.local');
     database.prepare('INSERT INTO lab_settings (key,value) VALUES (?,?)').run('reset_version', '1');
     database.exec('COMMIT');
@@ -110,6 +125,8 @@ export function reset(): void {
     DELETE FROM uploads; DELETE FROM payments; DELETE FROM order_items; DELETE FROM orders;
     DELETE FROM support_tickets; DELETE FROM profiles; DELETE FROM sessions; DELETE FROM users;
     DELETE FROM products; DELETE FROM missions; DELETE FROM lab_settings; DELETE FROM lab_products;
+    DELETE FROM lab_users; DELETE FROM lab_supply_chain; DELETE FROM lab_crypto_keys;
+    DELETE FROM lab_security_logs; DELETE FROM lab_exception_states;
     DELETE FROM sqlite_sequence;
     PRAGMA foreign_keys=ON;
   `);

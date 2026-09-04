@@ -6,5 +6,5 @@ export function logEvent(eventType: string, values: { requestId?: string; userId
 }
 
 export function hasEvent(userId: number, eventType: string, since: string): boolean {
-  return Boolean(db().prepare('SELECT 1 FROM admin_logs WHERE user_id=? AND event_type=? AND timestamp>=? LIMIT 1').get(userId, eventType, since));
+  return Boolean(db().prepare('SELECT 1 FROM admin_logs WHERE (user_id=? OR user_id IS NULL) AND event_type=? AND timestamp>=? LIMIT 1').get(userId, eventType, since));
 }

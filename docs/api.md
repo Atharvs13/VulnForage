@@ -54,6 +54,7 @@ All require a normal session and `LAB_MODE=true`.
 |---|---|---|
 | BOLA | GET `/api/lab/orders/:id` | No owner scope |
 | SQLi | GET `/api/lab/products/search?q=` | Concatenation into dedicated `lab_products` query |
+| SQLi | POST `/api/lab/sqli/login` | Concatenation into dedicated `lab_users` query |
 | XSS | GET `/api/lab/xss/search?q=` | Reflected unsafe-lab value |
 | XSS | POST/GET `/api/lab/xss/tickets` | Stored unsafe-lab messages |
 | CSRF | POST `/api/lab/csrf/change-email` | `{email}` without anti-CSRF token |

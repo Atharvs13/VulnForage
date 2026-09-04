@@ -8,6 +8,7 @@ const eventMap: Record<string, string> = {
   'VF-001': 'LAB_BOLA_EXPLOITED', 'VF-002': 'LAB_SQLI_EXPLOITED', 'VF-003': 'LAB_XSS_STORED',
   'VF-004': 'LAB_SSRF_INTERNAL', 'VF-005': 'LAB_CSRF_CHANGED', 'VF-006': 'LAB_UPLOAD_BYPASS',
   'VF-007': 'LAB_JWT_ADMIN', 'VF-008': 'LAB_LOGIC_PRICE', 'VF-009': 'LAB_CONFIG_EXPOSED',
+  'VF-010': 'LAB_SQLI_LOGIN_EXPLOITED',
 };
 
 function transform(row: MissionRow, userId: number): MissionRow {
