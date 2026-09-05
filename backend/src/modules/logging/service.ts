@@ -5,7 +5,7 @@ export function recordLogEvent(userId: number, logMessage: string) {
   // Check for CRLF injection (%0A, %0D, \n, \r)
   const isForged = logMessage.includes('\n') || logMessage.includes('\r') || logMessage.includes('%0A') || logMessage.includes('%0D');
   if (isForged) {
-    logEvent('LAB_LOGGING_FORGED', { userId, logMessage });
+    logEvent('LAB_LOGGING_FORGED', { userId, metadata: { logMessage } });
   }
 
   // Vulnerable log writing: directly writing raw unsanitized log

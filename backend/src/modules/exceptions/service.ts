@@ -11,7 +11,7 @@ export function processEvaluator(userId: number, payload: any) {
   } catch (error) {
     // Vulnerable fail-open behavior: catch block defaults authorized to TRUE on exception!
     authorized = true;
-    logEvent('LAB_EXCEPTION_BYPASSED', { userId, error: (error as Error).message });
+    logEvent('LAB_EXCEPTION_BYPASSED', { userId, metadata: { error: (error as Error).message } });
   }
 
   return {

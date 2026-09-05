@@ -5,7 +5,7 @@ import { hasEvent, logEvent } from './log.service.js';
 type MissionRow = Record<string, unknown>;
 
 const eventMap: Record<string, string> = {
-  'VF-001': 'LAB_BOLA_EXPLOITED', 'VF-002': 'LAB_SQLI_EXPLOITED', 'VF-003': 'LAB_XSS_STORED',
+  'VF-A01-001': 'LAB_BOLA_EXPLOITED', 'VF-002': 'LAB_SQLI_EXPLOITED', 'VF-003': 'LAB_XSS_STORED',
   'VF-004': 'LAB_SSRF_INTERNAL', 'VF-005': 'LAB_CSRF_CHANGED', 'VF-006': 'LAB_UPLOAD_BYPASS',
   'VF-007': 'LAB_JWT_ADMIN', 'VF-008': 'LAB_LOGIC_PRICE', 'VF-009': 'LAB_CONFIG_EXPOSED',
   'VF-010': 'LAB_SQLI_LOGIN_EXPLOITED', 'VF-011': 'LAB_SUPPLY_CHAIN_EXPOSED',
@@ -42,9 +42,12 @@ export function getMission(id: string, userId: number): MissionRow {
 
 export function startMission(id: string, userId: number): MissionRow {
   getMission(id, userId);
-  db().prepare(`INSERT INTO mission_attempts (mission_id,user_id,status) VALUES (?,?, 'in_progress')
+  const startedAt = new Date().toISOString();
+  db().prepare(`INSERT INTO mission_attempts (mission_id,user_id,status,evidence,started_at,completed_at) VALUES (?,?, 'in_progress', '{}', ?, null)
     ON CONFLICT(mission_id,user_id) DO UPDATE SET status=CASE WHEN status='completed' THEN status ELSE 'in_progress' END,
-    started_at=CASE WHEN status='completed' THEN started_at ELSE CURRENT_TIMESTAMP END`).run(id, userId);
+    evidence=CASE WHEN status='completed' THEN evidence ELSE '{}' END,
+    started_at=CASE WHEN status='completed' THEN started_at ELSE excluded.started_at END,
+    completed_at=CASE WHEN status='completed' THEN completed_at ELSE null END`).run(id, userId, startedAt);
   logEvent('MISSION_START', { userId, missionId: id });
   return getMission(id, userId);
 }

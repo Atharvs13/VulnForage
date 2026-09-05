@@ -32,9 +32,9 @@ function MissionsHeader({
   return (
     <div className="mb-6">
       <p className="eyebrow">Mission control · OWASP Top 10:2025</p>
-      <h1 className="page-title mt-2">Exploit curriculum</h1>
+      <h1 className="page-title mt-2">Security Missions</h1>
       <p className="mt-2 max-w-2xl text-muted">
-        Choose an objective, start the attempt, interact with the isolated target workbench, and submit evidence.
+        Select an OWASP training objective, launch your mission, test the target endpoint, and submit evidence to verify your findings.
       </p>
 
       <div className="mt-6 flex flex-wrap gap-2">
@@ -70,7 +70,12 @@ export function Missions() {
   const filtered = data
     ? selectedCategory === 'All'
       ? data
-      : data.filter((m) => m.category.toLowerCase().includes(selectedCategory.toLowerCase()))
+      : data.filter((m) => {
+          const cat = m.category.toLowerCase();
+          const sel = selectedCategory.toLowerCase();
+          if (sel === 'bola / idor') return cat.includes('bola') || cat.includes('idor') || cat.includes('a01');
+          return cat.includes(sel);
+        })
     : [];
 
   return (
@@ -127,13 +132,17 @@ function LabWorkbench({ mission }: { mission: Mission }) {
   const [value, setValue] = useState('');
   const [token, setToken] = useState('');
   const [file, setFile] = useState<File>();
+  const [busy, setBusy] = useState(false);
 
   const run = async (path: string, options: RequestInit = {}) => {
     setError(undefined);
+    setBusy(true);
     try {
       setOut(await api(path, options));
     } catch (e) {
       setError(e);
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -148,19 +157,34 @@ function LabWorkbench({ mission }: { mission: Mission }) {
     </>
   );
 
-  if (mission.id === 'VF-001')
+  if (mission.id === 'VF-A01-001' || mission.id === 'VF-001') {
     return (
-      <div>
-        <label>
-          <span className="label">Order ID</span>
-          <input className="input" value={value || '1001'} onChange={(e) => setValue(e.target.value)} />
-        </label>
-        <button className="btn mt-3" onClick={() => run(`/api/lab/orders/${value || 1001}`)}>
-          Request order
-        </button>
+      <div className="space-y-4">
+        <p className="text-sm text-slate-300">
+          Target Endpoint: <code className="text-cyan font-mono">{mission.target}</code>
+        </p>
+        <div className="grid gap-3 sm:grid-cols-[1fr_auto] items-end">
+          <label>
+            <span className="label">Order Identifier (:id)</span>
+            <input
+              className="input font-mono"
+              placeholder="1002"
+              value={value || '1002'}
+              onChange={(e) => setValue(e.target.value)}
+            />
+          </label>
+          <button
+            className="btn"
+            disabled={busy}
+            onClick={() => run(`/api/lab/orders/${value || 1002}`)}
+          >
+            {busy ? 'Requesting...' : 'Request Lab Order'}
+          </button>
+        </div>
         {common}
       </div>
     );
+  }
 
   if (mission.id === 'VF-002')
     return (
@@ -549,7 +573,13 @@ export function MissionDetail() {
   const [mission, setMission] = useState<Mission>();
   const [error, setError] = useState<unknown>();
   const [hintCount, setHintCount] = useState(0);
-  const [evidence, setEvidence] = useState('');
+
+  // Evidence Form State
+  const [httpRequest, setHttpRequest] = useState('');
+  const [httpResponse, setHttpResponse] = useState('');
+  const [notes, setNotes] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
   const [result, setResult] = useState<{ passed: boolean; feedback: string }>();
 
   const load = () =>
@@ -575,141 +605,240 @@ export function MissionDetail() {
 
   async function submit(e: FormEvent) {
     e.preventDefault();
+    setValidationError(null);
+    setResult(undefined);
+
+    const combinedEvidence = [httpRequest, httpResponse, notes].filter(Boolean).join('\n\n');
+    if (combinedEvidence.trim().length < 20) {
+      setValidationError('Evidence requires at least 20 characters of detail (HTTP Request, HTTP Response, or Notes).');
+      return;
+    }
+
+    setSubmitting(true);
     try {
+      const payload = {
+        evidence: {
+          request: httpRequest,
+          response: httpResponse,
+          notes: notes,
+          target: mission!.target,
+        },
+      };
       const x = await api<{ passed: boolean; feedback: string; mission: Mission }>(
         `/api/missions/${id}/attempt`,
         {
           method: 'POST',
-          body: JSON.stringify({ evidence: { notes: evidence, target: mission!.target } }),
+          body: JSON.stringify(payload),
         }
       );
       setResult(x);
       setMission(x.mission);
     } catch (err) {
       setError(err);
+    } finally {
+      setSubmitting(false);
     }
   }
 
   return (
     <>
-      <Link to="/missions" className="eyebrow">
-        ← mission board
+      <Link to="/missions" className="eyebrow inline-flex items-center gap-1 hover:text-white transition-colors">
+        ← Back to Mission Control
       </Link>
+
       <div className="mt-4 grid gap-6 xl:grid-cols-[1fr_360px]">
         <div className="space-y-6">
+          {/* Mission Metadata & Scope Card */}
           <section className="card">
             <div className="flex flex-wrap items-center gap-3">
-              <span className="eyebrow">
-                {mission.id} · {mission.category}
+              <span className="eyebrow">{mission.id}</span>
+              <span className="pill border-cyan/40 bg-cyan/10 font-semibold text-cyan">
+                {mission.category}
               </span>
               <Difficulty value={mission.difficulty} />
-              <span className="pill">{mission.status}</span>
+              <span className="pill">{mission.status.replace('_', ' ')}</span>
             </div>
+
             <h1 className="page-title mt-4">{mission.title}</h1>
-            <p className="mt-4 leading-7 text-muted">{mission.description}</p>
-            <div className="mt-6 grid gap-4 sm:grid-cols-2">
+            <p className="mt-3 leading-7 text-slate-300">{mission.description}</p>
+
+            <div className="mt-6 grid gap-4 rounded-lg border border-line bg-ink/40 p-4 sm:grid-cols-2">
               <div>
                 <span className="label">Objective</span>
-                <p>{mission.objective}</p>
+                <p className="text-sm font-medium text-white">{mission.objective}</p>
               </div>
               <div>
-                <span className="label">Target</span>
-                <code className="text-sm text-cyan">{mission.target}</code>
+                <span className="label">Target Endpoint</span>
+                <code className="text-sm font-mono text-cyan">{mission.target}</code>
               </div>
             </div>
+
             {mission.status === 'available' && (
-              <button className="btn mt-6" onClick={start}>
-                Start mission
+              <button className="btn mt-6 w-full sm:w-auto" onClick={start}>
+                Start Mission
               </button>
             )}
           </section>
+
+          {/* Attack Mode Section */}
           {mission.status !== 'available' && (
             <section className="card">
-              <div className="mb-5 flex items-center justify-between">
+              <div className="mb-5 flex items-center justify-between border-b border-line pb-4">
                 <div>
-                  <p className="eyebrow">Attack mode</p>
-                  <h2 className="mt-1 text-xl font-semibold">Target workbench</h2>
+                  <p className="eyebrow">Attack Mode</p>
+                  <h2 className="mt-1 text-xl font-bold text-white">Target Workbench</h2>
                 </div>
-                <span className="pill border-red-500/30 text-red-300">local scope only</span>
+                <span className="pill border-red-500/30 text-red-300 bg-red-500/10">
+                  Local Sandbox Scope
+                </span>
               </div>
               <LabWorkbench mission={mission} />
             </section>
           )}
+
+          {/* Evidence Submission Form */}
           {mission.status !== 'available' && mission.status !== 'completed' && (
-            <form className="card" onSubmit={submit}>
-              <p className="eyebrow">Evidence submission</p>
-              <h2 className="mt-1 text-xl font-semibold">Request validation</h2>
-              <p className="mt-2 text-sm text-muted">
-                Describe the request, interesting response, and controlled impact. The backend also requires a matching
-                lab event recorded after mission start.
-              </p>
-              <textarea
-                className="input mt-4 min-h-32"
-                required
-                minLength={20}
-                value={evidence}
-                onChange={(e) => setEvidence(e.target.value)}
-                placeholder="Endpoint, modified input, response, and why it demonstrates the weakness…"
-              />
-              <button className="btn mt-3">Submit attempt</button>
+            <form className="card space-y-4" onSubmit={submit}>
+              <div>
+                <p className="eyebrow">Evidence Submission</p>
+                <h2 className="mt-1 text-xl font-bold text-white">Capture & Submit Evidence</h2>
+                <p className="mt-1 text-xs text-muted">
+                  Provide HTTP traffic details or notes proving unauthorized access. A matching backend lab event must be logged after starting the mission.
+                </p>
+              </div>
+
+              {validationError && (
+                <div className="error" role="alert">
+                  {validationError}
+                </div>
+              )}
+
+              <div className="space-y-4">
+                <label className="block">
+                  <span className="label">HTTP Request</span>
+                  <textarea
+                    className="input min-h-24 font-mono text-xs"
+                    value={httpRequest}
+                    onChange={(e) => setHttpRequest(e.target.value)}
+                    placeholder={`GET /api/lab/orders/1002 HTTP/1.1\nHost: localhost:4000\nCookie: vf_session=...`}
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="label">HTTP Response</span>
+                  <textarea
+                    className="input min-h-24 font-mono text-xs"
+                    value={httpResponse}
+                    onChange={(e) => setHttpResponse(e.target.value)}
+                    placeholder={`HTTP/1.1 200 OK\nContent-Type: application/json\n\n{"id":1002,"customerName":"Morgan Tester",...}`}
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="label">Exploit Notes & Findings</span>
+                  <textarea
+                    className="input min-h-20 text-sm"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="Observed that modifying the numeric order ID parameter allows viewing orders of other synthetic users without authorization..."
+                  />
+                </label>
+              </div>
+
+              <button className="btn w-full" disabled={submitting}>
+                {submitting ? 'Submitting evidence...' : 'Submit Evidence'}
+              </button>
+
               {result && (
-                <div className={`mt-4 ${result.passed ? 'alert' : 'error'}`}>{result.feedback}</div>
+                <div className={`mt-4 ${result.passed ? 'alert' : 'error'}`}>
+                  <b>{result.passed ? 'Mission Accomplished!' : 'Validation Failed'}</b>
+                  <p className="mt-1 text-sm">{result.feedback}</p>
+                </div>
               )}
             </form>
           )}
-          {mission.defense && (
-            <section className="card border-acid/30">
-              <p className="eyebrow text-acid">Defense mode unlocked</p>
-              <h2 className="mt-2 text-2xl font-semibold">From exploit to control</h2>
-              <div className="mt-6 space-y-5">
+
+          {/* Defense Mode (Unlocked strictly after completion) */}
+          {mission.status === 'completed' && mission.defense && (
+            <section className="card border-acid/40 bg-gradient-to-b from-panel to-acid/5">
+              <div className="flex items-center justify-between border-b border-acid/20 pb-4">
                 <div>
-                  <span className="label">Root cause</span>
-                  <p>{mission.defense.rootCause}</p>
+                  <p className="eyebrow text-acid">Defense Mode Unlocked</p>
+                  <h2 className="mt-1 text-2xl font-bold text-white">Root Cause & Remediation Guide</h2>
                 </div>
+                <span className="pill border-acid/40 bg-acid/20 text-acid font-bold">
+                  Verified Complete
+                </span>
+              </div>
+
+              <div className="mt-6 space-y-6">
                 <div>
-                  <span className="label">Remediation</span>
-                  <p>{mission.defense.remediation}</p>
+                  <h3 className="label text-acid">1. Root Cause Analysis</h3>
+                  <p className="mt-1 text-sm leading-6 text-slate-200">{mission.defense.rootCause}</p>
                 </div>
+
                 <div>
-                  <span className="label">Retest</span>
-                  <p>{mission.defense.retest}</p>
+                  <h3 className="label text-acid">2. Impact & Vulnerable Design</h3>
+                  <p className="mt-1 text-sm leading-6 text-slate-300">
+                    The endpoint retrieved records directly using caller-supplied object IDs without verifying if the authenticated session user matches the order owner.
+                  </p>
+                </div>
+
+                <div>
+                  <h3 className="label text-acid">3. Secure Design & Remediation</h3>
+                  <p className="mt-1 text-sm leading-6 text-slate-200">{mission.defense.remediation}</p>
+                </div>
+
+                <div>
+                  <h3 className="label text-acid">4. Retest & Verification</h3>
+                  <p className="mt-1 text-sm leading-6 text-slate-300">{mission.defense.retest}</p>
                 </div>
               </div>
             </section>
           )}
         </div>
+
+        {/* Sidebar Info & Guided Mode */}
         <aside className="space-y-4">
           <div className="card">
-            <p className="eyebrow">Allowed scope</p>
-            <p className="mt-3 text-sm leading-6 text-muted">
-              Only this local VulnForge instance, synthetic identities, and documented lab targets. No public or
-              unrelated private systems.
+            <p className="eyebrow">Allowed Scope</p>
+            <p className="mt-2 text-xs leading-5 text-muted">
+              Strictly limited to this local VulnForge instance and synthetic data. Do not target production systems.
             </p>
           </div>
+
+          {/* Guided Mode Card */}
           <div className="card">
-            <p className="eyebrow">Guided mode</p>
-            <p className="mt-3 text-sm text-muted">
-              Reveal progressive methodology without immediately disclosing a full exploit.
+            <div className="flex items-center justify-between">
+              <p className="eyebrow">Guided Mode</p>
+              <span className="text-[10px] font-mono text-muted">
+                {hintCount} / {mission.hints.length} revealed
+              </span>
+            </div>
+            <p className="mt-2 text-xs text-muted">
+              Progressive methodology assistance without immediately revealing full exploit payloads.
             </p>
+
             {mission.hints.slice(0, hintCount).map((h, i) => (
               <div className="alert mt-3" key={h}>
                 <b>Hint {i + 1}</b>
-                <br />
-                {h}
+                <p className="mt-1 text-xs text-slate-200">{h}</p>
               </div>
             ))}
+
             {hintCount < mission.hints.length && (
               <button
-                className="btn-ghost mt-4 w-full"
+                className="btn-ghost mt-4 w-full text-xs"
                 onClick={() => setHintCount((x) => x + 1)}
               >
-                Reveal hint {hintCount + 1}
+                Reveal Hint {hintCount + 1}
               </button>
             )}
           </div>
+
           <div className="card">
-            <span className="label">Expected evidence</span>
-            <p className="text-sm text-muted">{mission.expectedEvidence}</p>
+            <span className="label">Expected Evidence Format</span>
+            <p className="mt-2 text-xs leading-5 text-muted">{mission.expectedEvidence}</p>
           </div>
         </aside>
       </div>

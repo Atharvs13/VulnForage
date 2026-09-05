@@ -9,6 +9,7 @@ function cookies(header = ''): Record<string, string> {
 }
 
 export function requestContext(req: Request, res: Response, next: NextFunction): void {
+  const started = Date.now();
   req.requestId = String(req.header('x-request-id') ?? randomUUID());
   res.setHeader('x-request-id', req.requestId);
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -20,7 +21,7 @@ export function requestContext(req: Request, res: Response, next: NextFunction):
     req.user = getUserBySession(sessionId);
   }
   res.on('finish', () => {
-    try { logEvent('HTTP_REQUEST', { requestId: req.requestId, userId: req.user?.id, route: req.path, method: req.method, statusCode: res.statusCode }); } catch { /* do not fail the response for audit logging */ }
+    try { logEvent('HTTP_REQUEST', { requestId: req.requestId, userId: req.user?.id, route: req.originalUrl.split('?')[0], method: req.method, statusCode: res.statusCode, metadata: { durationMs: Date.now() - started } }); } catch { /* do not fail the response for audit logging */ }
   });
   next();
 }

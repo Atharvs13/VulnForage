@@ -62,7 +62,7 @@ All deliberate weaknesses live below `backend/src/modules` and mount under `/api
 - SQLi queries only `lab_products`; SQLite single-statement preparation bounds the surface.
 - SSRF accepts one exact synthetic URL and performs no arbitrary network operation.
 - Lab files are size-limited, random-named, non-executable, and force-served as text.
-- BOLA accesses synthetic orders; CSRF changes a lab setting; business logic creates only a synthetic receipt.
+- A01 BOLA (`VF-A01-001`) accesses real synthetic orders through `GET /api/lab/orders/:id`, records `LAB_BOLA_EXPLOITED` only for authenticated cross-user access, and remains separate from the ownership-scoped `/api/orders` core routes. CSRF changes a lab setting; business logic creates only a synthetic receipt.
 - JWT and debug values are synthetic and independent of process/production secrets.
 
 ## Reset and deployment

@@ -2,7 +2,7 @@ import { db } from '../../database/index.js';
 import { logEvent } from '../../services/log.service.js';
 
 export function lookupHash(userId: number, hashInput: string) {
-  logEvent('LAB_CRYPTO_REVERSED', { userId, hashInput });
+  logEvent('LAB_CRYPTO_REVERSED', { userId, metadata: { hashInput } });
   const row = db().prepare('SELECT * FROM lab_crypto_keys WHERE hash_md5 = ? OR key_name = ?').get(hashInput, hashInput) as
     | { key_name: string; hash_md5: string; plain_secret: string }
     | undefined;
