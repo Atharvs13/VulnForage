@@ -1,130 +1,213 @@
-# VulnForge — Cybersecurity Training Lab (OWASP Top 10:2025)
+# VulnForage
 
-VulnForge is a locally deployable, intentionally vulnerable e-commerce and support web application built for hands-on application security training and penetration testing. Learners perform reconnaissance, inspect and modify HTTP requests, exploit controlled vulnerability modules, submit evidence, analyze root causes, study secure remediations, retest, and deterministically reset the range.
+VulnForage is an intentionally vulnerable, locally deployable cybersecurity training application focused on hands-on web application security and the OWASP Top 10:2025. It provides a structured environment for security learners, developers, and educators to practice identifying and exploiting vulnerabilities in a modern technology stack.
 
 > [!CAUTION]
-> **Lab Isolation Notice**: VulnForge is designed solely for local/private educational testing. Always run VulnForge on `localhost` or in an isolated, disposable VM environment. Never connect it to production networks, real credentials, public endpoints, or sensitive systems.
+> **Lab Safety Warning**
+> VulnForage is intentionally vulnerable by design. It should **only** be run on `localhost` or within private, isolated, and disposable environments. 
+> **Never** deploy this application to production systems, expose it to public endpoints, or use real credentials, real databases, or sensitive data within it.
 
 ---
 
-## 🏛 Architecture & Technology Stack
+## 🎯 Project Goals
 
-- **Frontend**: React 19 + TypeScript + Vite + Tailwind CSS (Port `5173`)
-- **Backend**: Node.js + Express 5 + TypeScript + Native SQLite (`node:sqlite`) (Port `4000`)
-- **Database**: Zero-dependency local SQLite database (`vulnforge.db`) with foreign key enforcement and WAL mode
-- **Vulnerability Isolation**: Dedicated lab endpoints isolated under `/api/lab/*` operating strictly on synthetic tables
+VulnForage aims to provide a realistic, modern, and reproducible environment for learning web application security. We focus on real HTTP and application behavior, moving beyond abstract theories to practical, hands-on exploitation and remediation workflows.
 
-```text
-Browser / Burp Suite / OWASP ZAP / curl
-          │ untrusted HTTP
-          ▼
-React + TypeScript + Vite (5173)
-          │ JSON / Multipart
-          ▼
-Express + TypeScript (4000)
-   ├── Core E-Commerce & Support API
-   ├── Mission Attempt & Event Validator
-   └── Explicit /api/lab/* Modules (OWASP Top 10:2025)
-          ▼
-SQLite Database + Local Lab File Storage
+## 🔄 Learning Workflow
+
+Our recommended approach to tackling labs:
+
+Understand ➔ Recon ➔ Inspect HTTP ➔ Identify vulnerability ➔ Exploit ➔ Collect evidence ➔ Understand root cause ➔ Apply remediation ➔ Retest ➔ Reset
+
+## 🏛 Architecture
+
+VulnForage uses a modern, separated frontend/backend architecture to simulate real-world web applications.
+
+```mermaid
+flowchart TD
+    A[Browser / Burp Suite / OWASP ZAP / curl] -->|HTTP/REST| B[React + TypeScript + Vite :5173]
+    B -->|API Requests| C[Express + TypeScript :4000]
+    C --> D[Core API & Support]
+    C --> E[Mission Engine]
+    C --> F[/api/lab/* Vulnerability Modules]
+    D --> G[(SQLite Database)]
+    E --> G
+    F --> G
 ```
 
+## 🛠 Technology Stack
+
+*   **Frontend**: React 19 + TypeScript + Vite + Tailwind CSS (Port: `5173`)
+*   **Backend**: Node.js + Express 5 + TypeScript (Port: `4000`)
+*   **Database**: SQLite using native `node:sqlite`
+*   **Security Testing Tools**: Bring your own (Burp Suite, OWASP ZAP, curl, Browser DevTools)
+*   **Vulnerability Modules**: Isolated within dedicated `/api/lab/*` routes.
+
+## 🛡 OWASP Top 10:2025
+
+VulnForage is structured around the OWASP Top 10:2025 framework. 
+
+*   A01 Broken Access Control
+*   A02 Security Misconfiguration
+*   A03 Software Supply Chain Failures
+*   A04 Cryptographic Failures
+*   A05 Injection
+*   A06 Insecure Design
+*   A07 Authentication Failures
+*   A08 Software or Data Integrity Failures
+*   A09 Logging & Alerting Failures
+*   A10 Mishandling of Exceptional Conditions
+
+> [!NOTE]
+> Please note that not all categories are fully implemented yet. See the **Current Lab Focus** and **Roadmap** sections for details on currently available missions.
+
+## 🔬 Current Lab Focus
+
+**Current Priority: A01:2025 — Broken Access Control (BOLA / IDOR)**
+
+*   **Mission**: `VF-A01-001`
+*   **Target**: `GET /api/lab/orders/:id`
+
+**Scenario**: 
+The application manages e-commerce orders. The standard `/api/orders` endpoints properly enforce access controls. However, the intentional lab endpoint `/api/lab/orders/:id` omits these checks. Your goal is to access an order belonging to another user.
+
+*   `user1@vulnforge.local` owns order ID `1001`
+*   `user2@vulnforge.local` owns order ID `1002`
+
+By authenticating as one user and modifying the `id` parameter to target the other user's order, you can exploit this Broken Object Level Authorization (BOLA) vulnerability.
+
+## 🎯 Mission System
+
+VulnForage utilizes a server-side mission validation and event workflow. When an exploit is successfully executed against a lab endpoint (e.g., cross-user data access in the BOLA lab), the backend detects the anomaly and registers a mission event (such as `LAB_BOLA_EXPLOITED`). This provides deterministic, server-side proof of exploitation.
+
+## 👥 Synthetic Data & Accounts
+
+**All identities, credentials, and data within VulnForage are entirely synthetic.** 
+There are no real users, and no production secrets or credentials should ever be used or exposed within this project. The database contains seeded test accounts (e.g., `user1@vulnforge.local`, `support@vulnforge.local`, `admin@vulnforge.local`) designed specifically for the lab scenarios.
+
 ---
 
-## 🛡 OWASP Top 10:2025 Curriculum & Missions
+## 🚀 Quick Start
 
-VulnForge features 15 dedicated missions mapping directly to the **OWASP Top 10:2025** standards:
+Ensure you have Node.js (>=22.5) installed.
 
-| Category | OWASP Top 10:2025 Title | Mission ID | Mission Title | Target Endpoint |
-|---|---|---|---|---|
-| **A01:2025** | Broken Access Control | `VF-A01-001` | Access Another User's Order (BOLA/IDOR) | `GET /api/lab/orders/:id` |
-| **A01:2025** | Broken Access Control | `VF-005` | Cross-site state change (CSRF) | `POST /api/lab/csrf/change-email` |
-| **A02:2025** | Security Misconfiguration | `VF-009` | Discover exposed configuration | `GET /api/lab/debug/config` |
-| **A03:2025** | Software Supply Chain Failures | `VF-011` | Supply chain metadata exposure | `GET /api/lab/supply-chain/manifest` |
-| **A04:2025** | Cryptographic Failures | `VF-007` | Tamper with a lab token (JWT `alg: none`) | `GET /api/lab/jwt/profile` |
-| **A04:2025** | Cryptographic Failures | `VF-015` | Weak hash & key exposure (MD5) | `POST /api/lab/crypto/hash` |
-| **A05:2025** | Injection | `VF-002` | Catalog search SQL injection | `GET /api/lab/products/search?q=` |
-| **A05:2025** | Injection | `VF-003` | Stored XSS in support preview | `POST/GET /api/lab/xss/tickets` |
-| **A05:2025** | Injection | `VF-004` | Controlled internal fetch (SSRF) | `POST /api/lab/ssrf/fetch` |
-| **A05:2025** | Injection | `VF-010` | Login SQL injection bypass | `POST /api/lab/sqli/login` |
-| **A06:2025** | Insecure Design | `VF-008` | Manipulate checkout pricing logic | `POST /api/lab/checkout` |
-| **A07:2025** | Authentication Failures | `VF-014` | Unrestricted brute force | `POST /api/lab/auth/bruteforce` |
-| **A08:2025** | Software & Data Integrity Failures | `VF-006` | Upload validation bypass (Double Extension) | `POST /api/lab/upload` |
-| **A09:2025** | Logging & Alerting Failures | `VF-012` | Log injection & unmonitored security | `POST /api/lab/logging/event` |
-| **A10:2025** | Mishandling of Exceptional Conditions | `VF-013` | Fail-open exception handling bypass | `POST /api/lab/exceptions/process` |
+### Option 1: Combined Start (Recommended)
 
----
-
-## ⚡ Quick Start
-
-### Prerequisites
-- Node.js 22.5+ (Node 24 recommended)
-- npm 10+
-
-### Setup & Launch
+From the repository root, you can install dependencies and run both servers concurrently:
 
 ```bash
-# 1. Install dependencies
+npm install -w backend
+npm install -w frontend
 npm install
-
-# 2. Configure environment variables (optional overrides)
-cp backend/.env.example backend/.env
-cp frontend/.env.example frontend/.env
-
-# 3. Seed database baseline
-npm run db:reset
-
-# 4. Start frontend and backend in dev mode
 npm run dev
 ```
 
-- **Frontend UI**: [http://localhost:5173](http://localhost:5173)
-- **Backend API**: [http://localhost:4000](http://localhost:4000)
-- **Health Check**: [http://localhost:4000/health](http://localhost:4000/health)
+### Option 2: Separate Terminals
 
----
-
-## 🔑 Synthetic Credentials
-
-All identities and data in VulnForge are completely synthetic:
-
-| Role | Email | Password | Purpose |
-|---|---|---|---|
-| User | `user1@vulnforge.local` | `User1Lab!` | Standard synthetic account |
-| User | `user2@vulnforge.local` | `User2Lab!` | Target account for BOLA exercises |
-| Support | `support@vulnforge.local` | `SupportLab!` | Support ticket management |
-| Admin | `admin@vulnforge.local` | `AdminLab!` | Administrator panel & lab reset |
-| Legacy Admin | `legacy-admin@vulnforge.local` | `SuperSecretLabPassword123!` | SQLi & brute-force target account |
-
-For the A01 BOLA lab, `user1@vulnforge.local` owns order `1001` and `user2@vulnforge.local` owns order `1002`. The normal `/api/orders` endpoints enforce ownership; the intentional lab target `GET /api/lab/orders/:id` omits that check for authenticated learners and records `LAB_BOLA_EXPLOITED` on cross-user access.
-
----
-
-## 🛠 Commands & Verification
-
+**Terminal 1 — Backend:**
 ```bash
-npm run dev          # Run frontend and backend concurrently
-npm run build        # Compile production TypeScript builds for backend and frontend
-npm test             # Execute backend HTTP integration & frontend Vitest suite
-npm run lint         # Execute strict TypeScript typechecking
-npm run db:reset     # Deterministically reset database to clean synthetic baseline
-npm run health       # Query health check on running backend server
+cd backend
+npm install
+npm run dev
 ```
 
----
+**Terminal 2 — Frontend:**
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
-## 🐳 Docker Deployment
+### Access Points
 
-To launch VulnForge in isolated containers:
+*   **Frontend**: http://localhost:5173
+*   **Backend**: http://localhost:4000
+*   **Backend Health Check**: http://localhost:4000/health
+
+## 🗄️ Database & Reset
+
+To reset the database to its initial clean state with all synthetic data seeded, run the following command from the repository root:
+
+```bash
+npm run db:reset
+```
+This is crucial for ensuring reproducible labs and clearing out any state changes made during exploitation.
+
+## 💻 Development Commands
+
+The root `package.json` provides the following unified commands:
+
+| Command | Description |
+| :--- | :--- |
+| `npm run dev` | Runs both backend and frontend concurrently in development mode |
+| `npm run build` | Builds both backend and frontend projects |
+| `npm run test` | Runs tests for both backend and frontend |
+| `npm run lint` | Lints both backend and frontend code |
+| `npm run db:reset` | Resets the backend database to a clean state |
+| `npm run health` | Checks the health of the backend server |
+
+## 📁 Project Structure
+
+```text
+VulnForage/
+├── backend/            # Express 5 backend & Core API
+├── frontend/           # React 19 frontend
+├── data/               # SQLite database storage directory
+├── docs/               # Project documentation
+├── scripts/            # Utility and helper scripts
+├── docker-compose.yml  # Docker container configuration
+└── package.json        # Root workspace configuration
+```
+
+## 🐳 Docker
+
+VulnForage can be run using Docker Compose for complete isolation.
 
 ```bash
 docker compose up --build
 ```
 
-Compose binds services exclusively to `127.0.0.1`. SQLite state is stored in a private Docker volume (`vulnforge-data`).
+This will build and start the backend and frontend services, binding them to `127.0.0.1` and persisting the SQLite database in a local Docker volume.
 
 ---
 
-## 🔄 Controlled Database Impact & Reset
+## 🤝 Contributing
 
-The database reset script (`npm run db:reset` or `POST /api/admin/lab/reset`) returns VulnForge to a known, clean baseline by resetting synthetic users, products, orders, tickets, lab settings, and fixtures while wiping attempts, sessions, uploads, and logs. Database schemas and migrations remain completely intact.
+We welcome contributions! Please follow this workflow to contribute:
+
+Issue ➔ Fork / Branch ➔ Changes ➔ Tests ➔ Pull Request ➔ Review ➔ Merge
+
+*   Keep Pull Requests focused on a single issue or feature.
+*   Always reference the relevant GitHub Issue in your PR.
+*   Use GitHub Issues and Pull Requests for all support and collaboration.
+
+### Development Principles
+
+When contributing to VulnForage, please adhere to these core principles:
+*   **One lab at a time**: Keep vulnerabilities isolated.
+*   **Real HTTP/application behavior**: Simulate real-world patterns over contrived CTF puzzles.
+*   **Synthetic data only**: Never commit real secrets.
+*   **Explicit `/api/lab/*` vulnerability boundaries**: Keep the core application secure; only the lab routes should be vulnerable.
+*   **Reproducible/resettable labs**: Ensure `npm run db:reset` cleanly restores state.
+*   **Server-side mission validation**: Rely on the backend to detect and confirm successful exploits.
+
+## 🗺️ Roadmap
+
+Our current development focus includes:
+*   Polish the A01 BOLA lab scenario.
+*   Improve the evidence collection workflow.
+*   Enhance the defense and remediation guidance.
+*   Improve lab reset functionality and reproducibility.
+*   Add automated test coverage.
+*   Incrementally build and release additional OWASP 2025 labs.
+
+## 🎓 Who is this for?
+
+VulnForage is built for a wide range of individuals passionate about security:
+*   Cybersecurity students
+*   Security learners
+*   Penetration-testing learners
+*   CTF players
+*   Developers looking to understand secure coding
+*   Security educators
+*   Application security learners
