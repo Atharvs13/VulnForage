@@ -97,6 +97,8 @@ CREATE TABLE IF NOT EXISTS mission_attempts (
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   status TEXT NOT NULL CHECK(status IN ('in_progress','failed','completed')),
   evidence TEXT NOT NULL DEFAULT '{}',
+  result TEXT NOT NULL DEFAULT '{}',
+  verified_event_id INTEGER REFERENCES admin_logs(id) ON DELETE SET NULL,
   attempt_count INTEGER NOT NULL DEFAULT 0,
   started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   completed_at TEXT,
@@ -115,6 +117,7 @@ CREATE TABLE IF NOT EXISTS admin_logs (
   metadata TEXT NOT NULL DEFAULT '{}'
 );
 CREATE INDEX IF NOT EXISTS idx_logs_event_user ON admin_logs(event_type, user_id);
+CREATE INDEX IF NOT EXISTS idx_logs_mission_event_user ON admin_logs(mission_id,event_type,user_id,timestamp);
 CREATE TABLE IF NOT EXISTS lab_settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL,
@@ -164,4 +167,31 @@ CREATE TABLE IF NOT EXISTS lab_exception_states (
   fail_mode TEXT NOT NULL,
   auth_bypass_enabled INTEGER NOT NULL DEFAULT 1
 );
+CREATE TABLE IF NOT EXISTS lab_role_definitions (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE,
+  description TEXT NOT NULL,
+  can_reclassify INTEGER NOT NULL CHECK(can_reclassify IN (0,1))
+);
+CREATE TABLE IF NOT EXISTS lab_user_roles (
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  role_id INTEGER NOT NULL REFERENCES lab_role_definitions(id) ON DELETE CASCADE,
+  PRIMARY KEY(user_id,role_id)
+);
+CREATE TABLE IF NOT EXISTS lab_access_resources (
+  id INTEGER PRIMARY KEY,
+  owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  classification TEXT NOT NULL CHECK(classification IN ('public','internal','restricted')),
+  status TEXT NOT NULL CHECK(status IN ('draft','active','archived')),
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_lab_access_resources_owner ON lab_access_resources(owner_id);
+CREATE TABLE IF NOT EXISTS lab_auth_attempts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  attempted_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  successful INTEGER NOT NULL CHECK(successful IN (0,1))
+);
+CREATE INDEX IF NOT EXISTS idx_lab_auth_attempts_user_time ON lab_auth_attempts(user_id,attempted_at);
 `;

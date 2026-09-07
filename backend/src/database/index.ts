@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { config } from '../config/index.js';
 import { schema } from './schema.js';
+import { runMigrations } from './migrations/index.js';
 import { hashPassword } from '../utils/password.js';
 
 let database: DatabaseSync | undefined;
@@ -22,13 +23,17 @@ export function closeDatabase(): void {
 }
 
 export function migrate(): void {
-  db().exec(schema);
+  const database = db();
+  database.exec(schema);
+  runMigrations(database);
 }
 
 type MissionSeed = [string, string, string, string, string, string, string, string[], string, string, string, string];
 
 const missions: MissionSeed[] = [
-  ['VF-A01-001', "Access Another User's Order", 'A01:2025 - Broken Access Control. Demonstrate broken object-level authorization by accessing another synthetic user\'s order while authenticated as a different user.', 'A01:2025 - Broken Access Control (BOLA / IDOR)', 'Medium', "Demonstrate broken object-level authorization by accessing another synthetic user's order while authenticated as a different user.", 'GET /api/lab/orders/:id', ['Open your own order list and note a normal order identifier.', 'Change only the numeric object identifier when requesting the lab endpoint.'], 'An HTTP request for a resource belonging to another synthetic user and the resulting response.', 'The backend returns an object based only on the supplied identifier and fails to verify ownership.', 'Use server-side object-level authorization: authenticate, identify the current user, load the requested object, verify ownership, then allow or deny.', 'Repeat the same request after applying the ownership check.'],
+  ['VF-A01-001', "Access Another User's Order", 'A01:2025 - Broken Access Control. Demonstrate broken object-level authorization by accessing another synthetic user\'s order while authenticated as a different user.', 'A01:2025 - Broken Access Control (BOLA / IDOR)', 'EASY', "Demonstrate broken object-level authorization by accessing another synthetic user's order while authenticated as a different user.", 'GET /api/lab/orders/:id', ['Open your own order list and note a normal order identifier.', 'Change only the numeric object identifier when requesting the lab endpoint.'], 'Method, endpoint, changed parameter, response observation, resource ID, and concise explanation.', 'The backend returns an object based only on the supplied identifier and fails to verify ownership.', 'Use server-side object-level authorization: authenticate, identify the current user, load the requested object, verify ownership, then allow or deny.', 'Repeat the same request after applying the ownership check.'],
+  ['VF-A01-002', 'Break a Nested Order Boundary', 'A nested route validates its parent user path but fails to validate the child order relationship.', 'A01:2025 - Broken Access Control (Nested BOLA)', 'MEDIUM', 'Access another synthetic user\'s order while retaining your own user ID in the parent path.', 'GET /api/lab/users/:userId/orders/:orderId', ['Keep the parent identifier equal to your authenticated user.', 'Determine which relationship the child lookup fails to enforce.'], 'Method, endpoint, changed orderId, response owner observation, resource ID, and explanation.', 'The service authorizes the supplied parent but loads the child independently.', 'Query the child with both its ID and authorized parent ID, then deny when the relationship does not match.', 'Repeat the nested request and verify the foreign order is not returned.'],
+  ['VF-A01-003', 'Confuse a Role and Resource Check', 'A synthetic resource workflow trusts a caller-supplied role identifier without checking assignment.', 'A01:2025 - Broken Access Control (Role Confusion)', 'HARD', 'Discover a privileged synthetic role and use it to reclassify another owner\'s resource.', 'PATCH /api/lab/access/resources/:id', ['Inspect the paginated role catalog and resource catalog.', 'Compare the role header with the roles actually assigned to your account.'], 'Method, endpoint, role header parameter, resource change observation, resource ID, event ID, and explanation.', 'Permission is checked on the requested role but role assignment and resource ownership are not checked.', 'Resolve roles from the authenticated principal and authorize the requested action against resource ownership.', 'Repeat with an unassigned role and verify the request is denied.'],
   ['VF-002', 'Find the SQL injection point', 'Investigate the dedicated catalog search query.', 'SQL Injection', 'Medium', 'Alter the intended query and return hidden synthetic catalog rows.', 'GET /api/lab/products/search?q=...', ['Compare a normal and special-character search.', 'Consider how SQL string literals are terminated.'], 'A manipulated request returning more rows than a normal search.', 'Untrusted input is concatenated into a SQL statement.', 'Use parameterized queries and allow-list expected filters.', 'Use the same payload against a parameterized implementation and confirm it is treated literally.'],
   ['VF-003', 'Stored XSS in support', 'Investigate how lab tickets are stored and rendered.', 'XSS', 'Medium', 'Store markup capable of executing in the vulnerable ticket preview.', 'POST /api/lab/xss/tickets', ['Submit harmless HTML first.', 'Inspect the lab preview rendering context.'], 'The stored payload and the affected unsafe render context.', 'Stored user input is inserted into the DOM as HTML.', 'Use contextual output encoding and avoid dangerous HTML rendering APIs.', 'Reload the ticket with safe text rendering and verify markup is inert.'],
   ['VF-004', 'Controlled internal fetch', 'Explore a server-side fetcher restricted to synthetic targets.', 'SSRF', 'Hard', 'Reach the allow-listed internal training service.', 'POST /api/lab/ssrf/fetch', ['Observe validation feedback for a rejected URL.', 'The target name is documented in the API contract.'], 'The synthetic internal service response.', 'A server-side fetch feature accepts a caller-controlled destination.', 'Strict destination allow-lists, URL parsing, DNS controls, and egress filtering.', 'Verify all non-allow-listed schemes and destinations remain rejected.'],
@@ -108,6 +113,16 @@ export function seed(): void {
     database.prepare('INSERT INTO lab_security_logs (raw_log,source_ip) VALUES (?,?)').run('INFO Auth initialized', '127.0.0.1');
     database.prepare('INSERT INTO lab_exception_states (service_name,fail_mode,auth_bypass_enabled) VALUES (?,?,?)').run('legacy_evaluator', 'fail_open', 1);
 
+    const labRole = database.prepare('INSERT INTO lab_role_definitions (id,name,description,can_reclassify) VALUES (?,?,?,?)');
+    labRole.run(901, 'viewer', 'Read assigned synthetic resources', 0);
+    labRole.run(940, 'analyst', 'Review internal synthetic resources', 0);
+    labRole.run(999, 'resource-admin', 'Reclassify synthetic lab resources', 1);
+    database.prepare('INSERT INTO lab_user_roles (user_id,role_id) VALUES (?,?)').run(1, 901);
+    database.prepare('INSERT INTO lab_user_roles (user_id,role_id) VALUES (?,?)').run(2, 940);
+    const labResource = database.prepare('INSERT INTO lab_access_resources (id,owner_id,title,classification,status) VALUES (?,?,?,?,?)');
+    labResource.run(7001, 1, 'Learner packet capture notes', 'internal', 'draft');
+    labResource.run(7002, 2, 'Incident response playbook', 'restricted', 'active');
+
     database.prepare('INSERT INTO lab_settings (key,value) VALUES (?,?)').run('contact_email_user_1', 'user1@vulnforge.local');
     database.prepare('INSERT INTO lab_settings (key,value) VALUES (?,?)').run('reset_version', '1');
     database.exec('COMMIT');
@@ -127,6 +142,8 @@ export function reset(): void {
     DELETE FROM products; DELETE FROM missions; DELETE FROM lab_settings; DELETE FROM lab_products;
     DELETE FROM lab_users; DELETE FROM lab_supply_chain; DELETE FROM lab_crypto_keys;
     DELETE FROM lab_security_logs; DELETE FROM lab_exception_states;
+    DELETE FROM lab_auth_attempts; DELETE FROM lab_access_resources; DELETE FROM lab_user_roles;
+    DELETE FROM lab_role_definitions;
     DELETE FROM sqlite_sequence;
     PRAGMA foreign_keys=ON;
   `);
