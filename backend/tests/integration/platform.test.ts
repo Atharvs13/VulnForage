@@ -26,8 +26,8 @@ before(async () => {
   process.env.DATABASE_URL = './data/test-vulnforge.db';
   const testPath = path.resolve('./data/test-vulnforge.db');
   for (const suffix of ['', '-wal', '-shm']) if (fs.existsSync(testPath + suffix)) fs.rmSync(testPath + suffix);
-  const appModule = await import('../src/app.js');
-  const databaseModule = await import('../src/database/index.js');
+  const appModule = await import('../../src/app.js');
+  const databaseModule = await import('../../src/database/index.js');
   database = databaseModule.db;
   closeDatabase = databaseModule.closeDatabase;
   server = await new Promise<Server>((resolve) => {
@@ -58,7 +58,9 @@ describe('health and authentication', () => {
     const rejected = await request('/api/auth/me', {}, registration.cookie); assert.equal(rejected.response.status, 401);
   });
   it('logs in a seeded user', async () => {
-    const login = await request('/api/auth/login', { method: 'POST', body: JSON.stringify({ email: 'user1@vulnforge.local', password: 'User1Lab!' }) }, '');
+    const login = await request('/api/auth/login', { method: 'POST', body: JSON.stringify({ email: 'git status
+git branch
+', password: 'User1Lab!' }) }, '');
     assert.equal(login.response.status, 200); userCookie = login.cookie;
     const userTwoLogin = await request('/api/auth/login', { method: 'POST', body: JSON.stringify({ email: 'user2@vulnforge.local', password: 'User2Lab!' }) }, '');
     assert.equal(userTwoLogin.response.status, 200); userTwoCookie = userTwoLogin.cookie;
@@ -98,7 +100,7 @@ describe('mission engine and isolated labs', () => {
     assert.equal(own.response.status, 200);
     assert.equal(own.body?.data.order.userId, 1);
     assert.equal(own.body?.data.order.items.length, 1);
-    const ownEvents = database().prepare("SELECT count(*) AS count FROM admin_logs WHERE event_type='LAB_BOLA_EXPLOITED'").get() as { count: number };
+    const ownEvents = database().prepare("SELECT count(*) AS count FROM admin_logs WHERE event_type='LAB_A01_BOLA_EXPLOITED'").get() as { count: number };
     assert.equal(ownEvents.count, 0);
 
     const foreign = await request('/api/lab/orders/1002', { headers: { 'x-request-id': 'a01-cross-user-test' } });
@@ -108,15 +110,16 @@ describe('mission engine and isolated labs', () => {
     assert.equal(foreign.body?.data.order.shippingAddress, '200 Synthetic Avenue, Lab City');
     assert.deepEqual(foreign.body?.data.order.items.map((item: { name: string }) => item.name), ['SignalKey Toolkit', 'Forensic USB Kit']);
 
-    const exploitEvent = database().prepare("SELECT * FROM admin_logs WHERE event_type='LAB_BOLA_EXPLOITED' ORDER BY id DESC LIMIT 1").get() as { user_id: number; request_id: string; metadata: string };
+    const exploitEvent = database().prepare("SELECT * FROM admin_logs WHERE event_type='LAB_A01_BOLA_EXPLOITED' ORDER BY id DESC LIMIT 1").get() as { id: number; user_id: number; request_id: string; mission_id: string; metadata: string };
     assert.equal(exploitEvent.user_id, 1);
     assert.equal(exploitEvent.request_id, 'a01-cross-user-test');
-    const metadata = JSON.parse(exploitEvent.metadata) as { userId: number; orderId: number; ownerId: number; requestId: string; timestamp: string };
-    assert.equal(metadata.userId, 1);
-    assert.equal(metadata.orderId, 1002);
-    assert.equal(metadata.ownerId, 2);
-    assert.equal(metadata.requestId, 'a01-cross-user-test');
-    assert.match(metadata.timestamp, /^\d{4}-\d{2}-\d{2}T/);
+    assert.equal(exploitEvent.mission_id, 'VF-A01-001');
+    const metadata = JSON.parse(exploitEvent.metadata) as { attackerUserId: number; targetObjectId: number; objectOwnerId: number; labId: string; endpoint: string };
+    assert.equal(metadata.attackerUserId, 1);
+    assert.equal(metadata.targetObjectId, 1002);
+    assert.equal(metadata.objectOwnerId, 2);
+    assert.equal(metadata.labId, 'VF-A01-001');
+    assert.equal(metadata.endpoint, '/api/lab/orders/1002');
 
     const missing = await request('/api/lab/orders/999999');
     assert.equal(missing.response.status, 404);
@@ -133,7 +136,7 @@ describe('mission engine and isolated labs', () => {
     const started = await request('/api/missions/VF-A01-001/start', { method: 'POST' });
     assert.equal(started.response.status, 200);
     assert.equal(started.body?.data.mission.status, 'in_progress');
-    const early = await request('/api/missions/VF-A01-001/attempt', { method: 'POST', body: JSON.stringify({ evidence: { notes: 'A sufficiently detailed but unproven evidence submission.' } }) });
+    const early = await request('/api/missions/VF-A01-001/attempt', { method: 'POST', body: JSON.stringify({ evidence: { method: 'GET', endpoint: '/api/lab/orders/1002', changedParameter: 'id from 1001 to 1002', responseObservation: 'No foreign order has been observed yet.', explanation: 'This is deliberately submitted before triggering the vulnerable lookup.' } }) });
     assert.equal(early.body?.data.passed, false);
 
     await new Promise((resolve) => setTimeout(resolve, 5));
@@ -141,11 +144,37 @@ describe('mission engine and isolated labs', () => {
     assert.equal(exploit.response.status, 200);
     assert.equal(exploit.body?.data.order.userId, 2);
 
-    const passed = await request('/api/missions/VF-A01-001/attempt', { method: 'POST', body: JSON.stringify({ evidence: { request: 'GET /api/lab/orders/1002', response: JSON.stringify(exploit.body?.data.order), endpoint: '/api/lab/orders/1002', parameter: 'id=1002', notes: 'Foreign synthetic order returned.' } }) });
+    const matchingEvent = database().prepare("SELECT id FROM admin_logs WHERE event_type='LAB_A01_BOLA_EXPLOITED' ORDER BY id DESC LIMIT 1").get() as { id: number };
+    const passed = await request('/api/missions/VF-A01-001/attempt', { method: 'POST', body: JSON.stringify({ evidence: { method: 'GET', endpoint: '/api/lab/orders/1002', changedParameter: 'id from 1001 to 1002', responseObservation: 'The response contains Morgan Tester and order 1002.', resourceId: 1002, eventId: matchingEvent.id, explanation: 'The lookup returned an order owned by user 2 while authenticated as user 1.' } }) });
     assert.equal(passed.body?.data.passed, true);
     assert.equal(passed.body?.data.mission.status, 'completed');
     assert.equal(passed.body?.data.mission.defense.rootCause, 'The backend returns an object based only on the supplied identifier and fails to verify ownership.');
     assert.match(passed.body?.data.mission.defense.remediation, /server-side object-level authorization/);
+    assert.equal(passed.body?.data.mission.attempt.verifiedEventId, matchingEvent.id);
+  });
+  it('implements A01 nested and role-confusion progression', async () => {
+    const catalog = await request('/api/lab');
+    assert.equal(catalog.response.status, 200);
+    assert.deepEqual(catalog.body?.data.labs.filter((lab: { id: string }) => lab.id.startsWith('VF-A01-')).map((lab: { difficulty: string }) => lab.difficulty), ['EASY', 'MEDIUM', 'HARD']);
+
+    const nestedOwnParentForeignChild = await request('/api/lab/users/1/orders/1002');
+    assert.equal(nestedOwnParentForeignChild.response.status, 200);
+    assert.equal(nestedOwnParentForeignChild.body?.data.order.userId, 2);
+    const nestedEvent = database().prepare("SELECT mission_id AS labId FROM admin_logs WHERE event_type='LAB_A01_NESTED_BOLA_EXPLOITED' ORDER BY id DESC LIMIT 1").get() as { labId: string };
+    assert.equal(nestedEvent.labId, 'VF-A01-002');
+    const rejectedParent = await request('/api/lab/users/2/orders/1002');
+    assert.equal(rejectedParent.response.status, 403);
+
+    const roles = await request('/api/lab/access/roles?page=1&pageSize=10&sort=name');
+    assert.equal(roles.response.status, 200);
+    assert(roles.body?.data.roles.some((role: { id: number }) => role.id === 999));
+    const resources = await request('/api/lab/access/resources?scope=catalog');
+    assert(resources.body?.data.resources.some((resource: { id: number; ownerId: number }) => resource.id === 7002 && resource.ownerId === 2));
+    const changed = await request('/api/lab/access/resources/7002', { method: 'PATCH', headers: { 'x-lab-role-id': '999' }, body: JSON.stringify({ classification: 'public' }) });
+    assert.equal(changed.response.status, 200);
+    assert.equal(changed.body?.data.resource.classification, 'public');
+    const roleEvent = database().prepare("SELECT metadata FROM admin_logs WHERE event_type='LAB_A01_ROLE_CONFUSION_EXPLOITED' ORDER BY id DESC LIMIT 1").get() as { metadata: string };
+    assert.equal(JSON.parse(roleEvent.metadata).roleAssignedToAttacker, false);
   });
   it('supports controlled SQLi, XSS, CSRF, and SSRF behavior', async () => {
     const sqli = await request(`/api/lab/products/search?q=${encodeURIComponent("' OR 1=1 -- ")}`); assert.equal(sqli.body?.data.rows.length, 3);
@@ -181,6 +210,10 @@ describe('admin authorization and reset', () => {
   it('rejects users and lets admin restore deterministic state', async () => {
     const rejected = await request('/api/admin'); assert.equal(rejected.response.status, 403);
     const login = await request('/api/auth/login', { method: 'POST', body: JSON.stringify({ email: 'admin@vulnforge.local', password: 'AdminLab!' }) }, '');
+    const targeted = await request('/api/admin/labs/VF-A01-003/reset', { method: 'POST' }, login.cookie);
+    assert.equal(targeted.response.status, 200);
+    const restored = database().prepare('SELECT classification FROM lab_access_resources WHERE id=7002').get() as { classification: string };
+    assert.equal(restored.classification, 'restricted');
     const reset = await request('/api/admin/lab/reset', { method: 'POST' }, login.cookie); assert.equal(reset.response.status, 200);
     const expired = await request('/api/auth/me', {}, login.cookie); assert.equal(expired.response.status, 401);
     const products = await request('/api/products', {}, ''); assert.equal(products.body?.data.products.length, 6);

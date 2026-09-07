@@ -1,0 +1,5 @@
+-- Applied programmatically by index.ts so existing SQLite databases receive the
+-- mission evidence columns safely after schema.ts creates new tables/indexes.
+--
+-- ALTER TABLE mission_attempts ADD COLUMN result TEXT NOT NULL DEFAULT '{}';
+-- ALTER TABLE mission_attempts ADD COLUMN verified_event_id INTEGER REFERENCES admin_logs(id);

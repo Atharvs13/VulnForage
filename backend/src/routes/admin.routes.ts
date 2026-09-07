@@ -1,11 +1,10 @@
-import fs from 'node:fs';
-import path from 'node:path';
 import { Router } from 'express';
-import { config } from '../config/index.js';
-import { db, reset } from '../database/index.js';
+import { db } from '../database/index.js';
+import { resetLab } from '../lab/lab.reset.js';
 import { requireRole } from '../middleware/auth.js';
 import { listOrders, listTickets } from '../services/core.service.js';
 import { logEvent } from '../services/log.service.js';
+import { resetAllSyntheticState } from '../services/reset.service.js';
 import { ok } from '../utils/http.js';
 
 export const adminRouter = Router();
@@ -16,11 +15,12 @@ adminRouter.get('/orders', (req, res) => ok(res, { orders: listOrders(req.user!.
 adminRouter.get('/tickets', (req, res) => ok(res, { tickets: listTickets(req.user!.id, true) }));
 adminRouter.get('/logs', (_req, res) => ok(res, { logs: db().prepare('SELECT * FROM admin_logs ORDER BY id DESC LIMIT 100').all() }));
 adminRouter.post('/lab/reset', (req, res) => {
-  for (const folder of ['uploads','lab-uploads']) {
-    const dir = path.join(path.dirname(config.databasePath), folder); fs.mkdirSync(dir, { recursive: true });
-    for (const file of fs.readdirSync(dir)) if (file !== '.gitkeep') fs.rmSync(path.join(dir, file));
-  }
-  reset();
+  resetAllSyntheticState();
   logEvent('LAB_RESET', { requestId: req.requestId, userId: req.user!.id, route: req.path, method: req.method });
   ok(res, { reset: true, message: 'Synthetic lab state restored; sign in again because sessions were reset.' });
+});
+adminRouter.post('/labs/:labId/reset', (req, res) => {
+  const result = resetLab(String(req.params.labId));
+  logEvent('LAB_RESET', { requestId: req.requestId, userId: req.user!.id, route: req.path, method: req.method, missionId: result.labId });
+  ok(res, result);
 });
