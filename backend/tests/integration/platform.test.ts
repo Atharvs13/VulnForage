@@ -58,9 +58,7 @@ describe('health and authentication', () => {
     const rejected = await request('/api/auth/me', {}, registration.cookie); assert.equal(rejected.response.status, 401);
   });
   it('logs in a seeded user', async () => {
-    const login = await request('/api/auth/login', { method: 'POST', body: JSON.stringify({ email: 'git status
-git branch
-', password: 'User1Lab!' }) }, '');
+    const login = await request('/api/auth/login', { method: 'POST', body: JSON.stringify({ email: 'user1@vulnforge.local', password: 'User1Lab!' }) }, '');
     assert.equal(login.response.status, 200); userCookie = login.cookie;
     const userTwoLogin = await request('/api/auth/login', { method: 'POST', body: JSON.stringify({ email: 'user2@vulnforge.local', password: 'User2Lab!' }) }, '');
     assert.equal(userTwoLogin.response.status, 200); userTwoCookie = userTwoLogin.cookie;
